@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from sqlalchemy.orm import Session
 
 from app.db.schema import User
@@ -9,7 +11,7 @@ class UserService:
     def list_users(self) -> list[type[User]]:
         return self._db.query(User).all()
 
-    def get_user(self, user_id: int) -> User | None:
+    def get_user(self, user_id: UUID) -> User | None:
         return self._db.query(User).filter(User.id == user_id).first()
 
     def create_user(self, username: str, password: str, email: str, full_name: str) -> User:
@@ -23,3 +25,5 @@ class UserService:
         self._db.commit()
         self._db.refresh(user)
         return user
+
+    # def update_user(self, user_id: UUID, username: str, password: str, email: str, full_name: str) -> User | None:
