@@ -1,19 +1,25 @@
 from dotenv import load_dotenv
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 load_dotenv()
 
 
 class Config(BaseSettings):
     app_name: str = "ObjectDetectionAPI"
+    description: str = "A REST API for the central server on ObjectDetection"
+    version:str = "1" 
     debug: bool = False
-    db_user: str = ""
-    db_password: str = ""
-    db_name: str = "objectDetection.db"
+
+    DB_NAME: str
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        extra="ignore"
+    )
 
     @property
     def db_url(self):
-        return f"sqlite:///./{self.db_name}"
+        return f"sqlite:///./{self.DB_NAME}"
 
 
 config = Config()

@@ -9,8 +9,11 @@ from app.db.database import engine
 setup_logging()
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title=config.app_name)
+app = FastAPI(
+    title=config.app_name,
+    description=config.description,
+    version=config.version)
 
 
 # Register routes
-app.include_router(user.router, prefix="/api/v1")
+app.include_router(user.router, prefix="/api/v1", tags=["Users"])
