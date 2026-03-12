@@ -7,3 +7,5 @@ idea/
 venv/
 objectDetection.db
 TODO.md
+.postman
+postman
