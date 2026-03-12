@@ -26,3 +26,9 @@ def get_user(user_id: UUID, service: UserService = Depends(get_user_service)):
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return user
+@router.delete("/users/{user_id}")
+def delete_user(user_id: UUID, service: UserService = Depends(get_user_service)):
+    success = service.delete_user(user_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"success":True}

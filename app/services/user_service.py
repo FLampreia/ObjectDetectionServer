@@ -27,3 +27,10 @@ class UserService:
         return user
 
     # def update_user(self, user_id: UUID, username: str, password: str, email: str, full_name: str) -> User | None:
+    def delete_user(self, user_id: UUID) -> bool:
+        user = self.get_user(user_id)
+        if not user:
+            return False
+        self._db.delete(user)
+        self._db.commit()
+        return True
