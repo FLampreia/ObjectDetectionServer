@@ -5,7 +5,7 @@ from app.core.config import config
 from app.core.logging_config import setup_logging
 from app.db.schema import Base
 from app.db.database import engine
-from app.exceptions.user_exceptions import register_all_exceptions
+from app.exceptions.register import register_all_exceptions
 
 setup_logging()
 Base.metadata.create_all(bind=engine)

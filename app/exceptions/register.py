@@ -1,21 +1,7 @@
-from fastapi import FastAPI
-from starlette import status
+from fastapi import FastAPI, status
 
-from app.exceptions.base import AppException, create_exception_handler
-
-
-class EmailAlreadyExists(AppException):
-    def __init__(self):
-        super().__init__("Email already registered")
-
-
-class UsernameAlreadyExists(AppException):
-    def __init__(self):
-        super().__init__("Username already registered")
-
-class DatabaseIntegrityException(AppException):
-    def __init__(self):
-        super().__init__("Database integrity exception")
+from app.exceptions.base import create_exception_handler
+from app.exceptions.custom_exceptions import EmailAlreadyExists, UsernameAlreadyExists, DatabaseIntegrityException
 
 
 def register_all_exceptions(app: FastAPI):

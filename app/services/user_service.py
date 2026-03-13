@@ -4,7 +4,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.db.schema import User
-from app.exceptions.user_exceptions import EmailAlreadyExists, UsernameAlreadyExists, DatabaseIntegrityException
+from app.exceptions.custom_exceptions import EmailAlreadyExists, UsernameAlreadyExists, DatabaseIntegrityException
 
 
 class UserService:
