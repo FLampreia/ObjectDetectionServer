@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 
 from app.api.v1 import user
+from app.api.v1.auth import auth_router
 from app.core.config import config
 from app.core.logging_config import setup_logging
 from app.db.schema import Base
@@ -19,4 +20,6 @@ app = FastAPI(
 register_all_exceptions(app)
 
 # Register routes
-app.include_router(user.router, prefix="/api/v1", tags=["Users"])
+app.include_router(user.user_router, prefix=f"/api/v{config.version}", tags=["Users"])
+
+app.include_router(auth_router, prefix=f"/api/v{config.version}", tags=["Auth"])

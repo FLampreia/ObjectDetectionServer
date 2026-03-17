@@ -3,8 +3,15 @@ from uuid import UUID
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.core.security import generate_password_hash, verify_password
 from app.db.schema import User
-from app.exceptions.custom_exceptions import EmailAlreadyExists, UsernameAlreadyExists, DatabaseIntegrityException
+from app.exceptions.custom_exceptions import (
+    EmailAlreadyExists,
+    UsernameAlreadyExists,
+    DatabaseIntegrityException,
+    EmailNotFound,
+    InvalidCredentials
+)
 
 
 class UserService:
@@ -20,7 +27,7 @@ class UserService:
     def create_user(self, username: str, password: str, email: str, full_name: str) -> User:
         user = User(
             username=username,
-            password=password,
+            password=generate_password_hash(password),
             email=email,
             full_name=full_name
         )
@@ -30,17 +37,16 @@ class UserService:
         try:
             self._db.commit()
             self._db.refresh(user)
+
             return user
 
         # In case data already exists
         except Exception as e:
             self._db.rollback()
-
             error_message = str(e)
 
             if "users.email" in error_message:
                 raise EmailAlreadyExists()
-
             if "users.username" in error_message:
                 raise UsernameAlreadyExists()
 
@@ -65,3 +71,25 @@ class UserService:
         self._db.delete(user)
         self._db.commit()
         return True
+
+    def get_user_by_email(self, user_email: str) -> User | None:
+        user = self._db.query(User).filter(User.email == user_email).first()
+
+        if not user:
+            raise EmailNotFound()
+        return user
+
+    def user_exists_by_email(self, email: str):
+
+        user = self.get_user_by_email(email)
+
+        return True if user is not None else False
+
+
+    def verify_login(self, email: str, password: str)-> bool:
+        try:
+            user = self.get_user_by_email(email)
+            return verify_password(password, str(user.password))
+        except InvalidCredentials():
+            return False
+

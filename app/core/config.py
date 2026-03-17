@@ -3,7 +3,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 load_dotenv()
 
-
 class Config(BaseSettings):
     app_name: str = "ObjectDetectionAPI"
     description: str = "A REST API for the central server on ObjectDetection"
@@ -11,6 +10,11 @@ class Config(BaseSettings):
     debug: bool = False
 
     DB_NAME: str
+    JWT_SECRET: str
+    ACCESS_TOKEN_EXPIRE_MINUTES: int
+    REFRESH_TOKEN_EXPIRE_DAYS: int
+    REDIS_HOST: str = "localhost"
+    REDIS_PORT: int = 6379
 
     model_config = SettingsConfigDict(
         env_file=".env",
