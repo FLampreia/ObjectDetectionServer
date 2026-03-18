@@ -15,6 +15,7 @@ class Config(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAYS: int
     REDIS_HOST: str = "localhost"
     REDIS_PORT: int = 6379
+    JTI_EXPIRY: int = 3600
 
     model_config = SettingsConfigDict(
         env_file=".env",

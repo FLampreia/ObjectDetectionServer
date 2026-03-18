@@ -3,7 +3,7 @@ from fastapi.security import HTTPBearer
 from fastapi.security.http import HTTPAuthorizationCredentials
 from fastapi import WebSocket
 from sqlalchemy.orm import Session
-from app.core.redis import token_in_blocklist
+from app.core.redis_config import token_in_blocklist
 from app.exceptions.custom_exceptions import (
     InvalidToken,
     RefreshTokenRequired,
