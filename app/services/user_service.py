@@ -57,7 +57,7 @@ class UserService:
         if not user:
             return None
         user.username = username
-        user.password = password
+        user.password = generate_password_hash(password)
         user.email = email
         user.full_name = full_name
         self._db.commit()
@@ -73,10 +73,9 @@ class UserService:
         return True
 
     def get_user_by_email(self, user_email: str) -> User | None:
+
         user = self._db.query(User).filter(User.email == user_email).first()
 
-        if not user:
-            raise EmailNotFound()
         return user
 
     def user_exists_by_email(self, email: str):
@@ -85,11 +84,11 @@ class UserService:
 
         return True if user is not None else False
 
+    def verify_login(self, email: str, password: str) -> bool:
+        user = self.get_user_by_email(email)
 
-    def verify_login(self, email: str, password: str)-> bool:
-        try:
-            user = self.get_user_by_email(email)
-            return verify_password(password, str(user.password))
-        except InvalidCredentials():
+        if not user:
             return False
+
+        return verify_password(password, str(user.password))
 

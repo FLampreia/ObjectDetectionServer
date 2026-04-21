@@ -24,7 +24,7 @@ class User(Base):
         index=True
     )
     username: Mapped[str] = mapped_column(String, index=True, unique=True)
-    password: Mapped[str] = mapped_column(String, index=True) #TODO encriptar a password
+    password: Mapped[str] = mapped_column(String, index=True)
     email: Mapped[str] = mapped_column(String, index=True, unique=True)
     full_name: Mapped[str] = mapped_column(String, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, index=True)

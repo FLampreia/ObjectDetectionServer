@@ -28,6 +28,3 @@ async def check_redis_connection():
         await token_blocklist.ping()
     except Exception as e:
         raise RedisNotAvailable()
-
-#TODO verificar o dockerfile com o redis
-#TODO acho que nao está a funcionar

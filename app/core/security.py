@@ -1,6 +1,7 @@
 import hashlib
 from datetime import timedelta, datetime
 import jwt
+from jwt import PyJWTError
 from passlib.context import CryptContext
 from app.core.config import config
 import uuid
@@ -57,11 +58,11 @@ def decode_token(token: str) -> dict:
         token_data = jwt.decode(
             jwt = token,
             key = config.JWT_SECRET,
-            algorithms = [config.JWT_ALGORITHM]
+            algorithms = "HS256"
         )
 
         return token_data
 
-    except jwt.PyJWTError as e:
+    except PyJWTError as e:
         logging.exception(e)
         return None

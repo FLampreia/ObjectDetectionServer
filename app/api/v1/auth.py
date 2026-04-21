@@ -5,7 +5,7 @@ from app.core.config import config
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from starlette import status
-from app.api.deps import get_user_service
+from app.api.deps import get_user_service, get_current_user
 from app.core.security import create_access_token
 from app.db.database import SessionLocal, get_db
 from app.exceptions.custom_exceptions import InvalidCredentials
@@ -69,3 +69,9 @@ def login(
             }
         )
     raise InvalidCredentials()
+
+@auth_router.get("/me", response_model=UserRead, status_code=status.HTTP_200_OK)
+def me (
+        current_user = Depends(get_current_user)
+):
+    return current_user

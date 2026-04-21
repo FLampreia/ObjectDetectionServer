@@ -2,6 +2,9 @@ import logging
 
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
+
+from starlette.middleware.cors import CORSMiddleware
+
 from app.api.v1 import user
 from app.api.v1.auth import auth_router
 from app.core.config import config
@@ -29,6 +32,16 @@ app = FastAPI(
     description=config.description,
     version=config.version,
     lifespan=life_span
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 register_all_exceptions(app)
