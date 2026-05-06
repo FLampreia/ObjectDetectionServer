@@ -48,3 +48,7 @@ class InvalidCredentials(AppException):
 class RedisNotAvailable(AppException):
     def __init__(self):
         super().__init__("Redis not available")
+
+class InvalidCurrentPassword (AppException):
+    def __init__(self):
+        super().__init__("Invalid current password")

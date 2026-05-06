@@ -37,7 +37,8 @@ def create_access_token(user_data: dict, expires_delta: timedelta = None, refres
         expires_delta if expires_delta else timedelta(minutes=config.ACCESS_TOKEN_EXPIRE_MINUTES)
     )
 
-    payload = {'user': user_data,
+    payload = {
+        'user': user_data,
                'exp': expire,
                'jti': str(uuid.uuid4()),
                'refresh': refresh
@@ -46,7 +47,7 @@ def create_access_token(user_data: dict, expires_delta: timedelta = None, refres
     token = jwt.encode(
         payload = payload,
         key = config.JWT_SECRET,
-        algorithm = "HS256"
+        algorithm = config.JWT_ALGORITHM
     )
 
     return token
@@ -58,7 +59,7 @@ def decode_token(token: str) -> dict:
         token_data = jwt.decode(
             jwt = token,
             key = config.JWT_SECRET,
-            algorithms = "HS256"
+            algorithms = config.JWT_ALGORITHM
         )
 
         return token_data

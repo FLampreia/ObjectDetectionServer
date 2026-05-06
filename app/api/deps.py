@@ -26,7 +26,7 @@ def get_current_user(
             detail="Invalid token",
         )
 
-    user_id = UUID(payload["user"]["user"]["user_id"])
+    user_id = UUID(payload["user"]["user_id"])
 
     user = service.get_user(user_id)
 

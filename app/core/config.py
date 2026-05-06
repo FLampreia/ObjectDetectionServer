@@ -11,6 +11,7 @@ class Config(BaseSettings):
 
     DB_NAME: str
     JWT_SECRET: str
+    JWT_ALGORITHM: str
     ACCESS_TOKEN_EXPIRE_MINUTES: int
     REFRESH_TOKEN_EXPIRE_DAYS: int
     REDIS_HOST: str = "localhost"

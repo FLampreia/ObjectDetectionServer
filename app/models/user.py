@@ -1,5 +1,6 @@
 from datetime import datetime
 import uuid
+from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -27,3 +28,10 @@ class UserLogin(BaseModel):
     email: str
     password: str
 
+class UserUpdate(BaseModel):
+    username: Optional[str] = None
+    email: Optional[str] = None # todo veridicar se vale a pena ter aqui o update email visto que podera ser uma cosia que nao será utilizada
+    full_name: Optional[str] = None
+    password: Optional[str] = None
+    role: Optional[Role] = None
+    current_password: Optional[str] = None

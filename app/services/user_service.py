@@ -10,7 +10,7 @@ from app.exceptions.custom_exceptions import (
     UsernameAlreadyExists,
     DatabaseIntegrityException,
     EmailNotFound,
-    InvalidCredentials
+    InvalidCredentials, InvalidCurrentPassword
 )
 
 
@@ -52,17 +52,48 @@ class UserService:
 
             raise DatabaseIntegrityException()
 
-    def update_user(self, user_id: UUID, username: str, password: str, email: str, full_name: str) -> User | None:
+    # def update_user(self, user_id: UUID, username: str, password: str, email: str, full_name: str) -> User | None:
+    #     user = self.get_user(user_id)
+    #     if not user:
+    #         return None
+    #     user.username = username
+    #     user.password = generate_password_hash(password)
+    #     user.email = email
+    #     user.full_name = full_name
+    #     self._db.commit()
+    #     self._db.refresh(user)
+    #     return user
+
+    def update_user_partial(self, user_id: UUID, username: str | None, password: str | None, email: str | None, full_name: str | None, current_password: str | None) -> User | None:
         user = self.get_user(user_id)
+
         if not user:
             return None
-        user.username = username
-        user.password = generate_password_hash(password)
-        user.email = email
-        user.full_name = full_name
+
+        if username is not None:
+            user.username = username
+
+        if email is not None:
+            user.email = email
+
+        if full_name is not None:
+            user.full_name = full_name
+
+        if password is not None:
+            if current_password is None:
+                raise InvalidCurrentPassword()
+
+            if not verify_password(current_password, user.password):
+                raise InvalidCurrentPassword()
+
+            user.password = generate_password_hash(password)
+
         self._db.commit()
         self._db.refresh(user)
+
         return user
+
+
 
     def delete_user(self, user_id: UUID) -> bool:
         user = self.get_user(user_id)

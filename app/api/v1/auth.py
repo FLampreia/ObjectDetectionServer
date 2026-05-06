@@ -42,20 +42,16 @@ def login(
 
         access_token = create_access_token(
             user_data={
-                'user': {
-                    'email': logged_user.email,
-                    'user_id': str(logged_user.id),
-                    'role': getattr(logged_user.role, "value", None)
-                }
+                'email': logged_user.email,
+                'user_id': str(logged_user.id),
+                'role': getattr(logged_user.role, "value", None)
             }
         )
 
         refresh_token = create_access_token(
             user_data={
-                'user': {
-                    'email': logged_user.email,
-                    'user_id': str(logged_user.id)
-                }
+                'email': logged_user.email,
+                'user_id': str(logged_user.id)
             },
             refresh=True,
             expires_delta=timedelta(days=config.REFRESH_TOKEN_EXPIRE_DAYS)
@@ -75,3 +71,4 @@ def me (
         current_user = Depends(get_current_user)
 ):
     return current_user
+
