@@ -52,18 +52,6 @@ class UserService:
 
             raise DatabaseIntegrityException()
 
-    # def update_user(self, user_id: UUID, username: str, password: str, email: str, full_name: str) -> User | None:
-    #     user = self.get_user(user_id)
-    #     if not user:
-    #         return None
-    #     user.username = username
-    #     user.password = generate_password_hash(password)
-    #     user.email = email
-    #     user.full_name = full_name
-    #     self._db.commit()
-    #     self._db.refresh(user)
-    #     return user
-
     def update_user_partial(self, user_id: UUID, username: str | None, password: str | None, email: str | None, full_name: str | None, current_password: str | None) -> User | None:
         user = self.get_user(user_id)
 

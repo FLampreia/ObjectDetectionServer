@@ -39,18 +39,16 @@ def create_access_token(user_data: dict, expires_delta: timedelta = None, refres
 
     payload = {
         'user': user_data,
-               'exp': expire,
-               'jti': str(uuid.uuid4()),
-               'refresh': refresh
-               }
+        'exp': expire,
+        'jti': str(uuid.uuid4()),
+        'refresh': refresh
+    }
 
-    token = jwt.encode(
+    return jwt.encode(
         payload = payload,
         key = config.JWT_SECRET,
         algorithm = config.JWT_ALGORITHM
     )
-
-    return token
 
 def decode_token(token: str) -> dict:
 

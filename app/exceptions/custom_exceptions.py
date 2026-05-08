@@ -29,6 +29,10 @@ class RevokedToken(AppException):
     def __init__(self):
         super().__init__("Revoked token")
 
+class InvalidSession(AppException):
+    def __init__(self):
+        super().__init__("Invalid session")
+
 class RefreshTokenRequired(AppException):
     def __init__(self):
         super().__init__("Refresh token required")

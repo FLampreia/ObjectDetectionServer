@@ -10,7 +10,7 @@ from app.exceptions.custom_exceptions import (
     RevokedToken,
     RefreshTokenRequired,
     AccessTokenRequired,
-    InsufficientPermission, UserNotFound, InvalidCredentials, RedisNotAvailable, InvalidCurrentPassword
+    InsufficientPermission, UserNotFound, InvalidCredentials, RedisNotAvailable, InvalidCurrentPassword, InvalidSession
 )
 
 
@@ -53,6 +53,13 @@ def register_all_exceptions(app: FastAPI):
 
     app.add_exception_handler(
         RevokedToken,
+        create_exception_handler(
+            status_code=status.HTTP_401_UNAUTHORIZED
+        )
+    )
+
+    app.add_exception_handler(
+        InvalidSession,
         create_exception_handler(
             status_code=status.HTTP_401_UNAUTHORIZED
         )

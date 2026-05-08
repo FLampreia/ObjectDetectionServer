@@ -13,7 +13,7 @@ from app.exceptions.custom_exceptions import (
 from app.db.schema import User
 from app.db.database import get_db
 from app.services.user_service import UserService
-from security import decode_token
+from app.core.security import decode_token
 
 def get_user_service(db: Session = Depends(get_db)) -> UserService:
     return UserService(session=db)
