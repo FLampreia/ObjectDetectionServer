@@ -5,8 +5,10 @@ from contextlib import asynccontextmanager
 
 from starlette.middleware.cors import CORSMiddleware
 
-from app.api.v1 import user
+
 from app.api.v1.auth import auth_router
+from app.api.v1.team import team_router
+from app.api.v1.user import user_router
 from app.core.config import config
 from app.core.logging_config import setup_logging
 from app.core.redis_config import check_redis_connection
@@ -50,6 +52,8 @@ app.add_middleware(
 register_all_exceptions(app)
 
 # Register routes
-app.include_router(user.user_router, prefix=f"/api/v{config.version}", tags=["Users"])
+app.include_router(user_router, prefix=f"/api/v{config.version}", tags=["Users"])
 
 app.include_router(auth_router, prefix=f"/api/v{config.version}", tags=["Auth"])
+
+app.include_router(team_router, prefix=f"/api/v{config.version}", tags=["Teams"])

@@ -3,6 +3,8 @@ from fastapi.security import HTTPBearer
 from fastapi.security.http import HTTPAuthorizationCredentials
 from fastapi import WebSocket
 from sqlalchemy.orm import Session
+
+from app.core.deps import get_user_service
 from app.core.redis_config import token_in_blocklist, is_session_revoked
 from app.exceptions.custom_exceptions import (
     InvalidToken,
@@ -13,11 +15,10 @@ from app.exceptions.custom_exceptions import (
 from uuid import UUID
 from app.db.schema import User
 from app.db.database import get_db
+from app.services.team_service import TeamService
 from app.services.user_service import UserService
 from app.core.security import decode_token
 
-def get_user_service(db: Session = Depends(get_db)) -> UserService:
-    return UserService(session=db)
 
 class TokenBearer(HTTPBearer):
 
@@ -73,11 +74,11 @@ class RefreshTokenBearer(TokenBearer):
 
 def get_current_user(
     token_details: dict = Depends(AccessTokenBearer()),
-    session: Session = Depends(get_db)
+    user_service: UserService = Depends(get_user_service)
 ) -> User:
 
     user_id = UUID(token_details["sub"])
-    user_service = UserService(session)
+
     user = user_service.get_user(user_id)
 
     return user

@@ -4,7 +4,8 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.core.token import get_user_service, get_current_user
+from app.core.deps import get_user_service
+from app.core.token import get_current_user
 from app.db.database import get_db
 from app.exceptions.custom_exceptions import UserNotFound
 from app.models.user import UserCreate, UserRead, UserUpdate
@@ -45,7 +46,6 @@ def update_user_partial(
     updated = service.update_user_partial(
         user_id=user_id,
         username=user.username,
-        email=user.email,
         password=user.password,
         full_name=user.full_name,
         current_password= user.current_password,

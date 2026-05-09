@@ -21,7 +21,7 @@ auth_router = APIRouter()
 logger = logging.getLogger(__name__)
 
 @auth_router.post("/signin", response_model=UserRead, status_code=status.HTTP_201_CREATED)
-def create_user_account(
+def create_user(
         user: UserCreate,
         service: UserService = Depends(get_user_service),
 ):

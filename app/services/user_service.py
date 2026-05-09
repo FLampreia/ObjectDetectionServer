@@ -52,7 +52,7 @@ class UserService:
 
             raise DatabaseIntegrityException()
 
-    def update_user_partial(self, user_id: UUID, username: str | None, password: str | None, email: str | None, full_name: str | None, current_password: str | None) -> User | None:
+    def update_user_partial(self, user_id: UUID, username: str | None, password: str | None, full_name: str | None, current_password: str | None) -> User | None:
         user = self.get_user(user_id)
 
         if not user:
@@ -60,9 +60,6 @@ class UserService:
 
         if username is not None:
             user.username = username
-
-        if email is not None:
-            user.email = email
 
         if full_name is not None:
             user.full_name = full_name
@@ -80,8 +77,6 @@ class UserService:
         self._db.refresh(user)
 
         return user
-
-
 
     def delete_user(self, user_id: UUID) -> bool:
         user = self.get_user(user_id)

@@ -2,17 +2,12 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import String, create_engine, DateTime, Column, Enum
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
+from sqlalchemy import String, create_engine, DateTime, Column, Enum, ForeignKey
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker, relationship
 
 
 class Base(DeclarativeBase):
     pass
-
-class Role(enum.Enum):
-    Viewer = "viewer"
-    Operator = "operator"
-    Admin = "admin"
 
 class User(Base):
     __tablename__ = "users"
@@ -28,8 +23,67 @@ class User(Base):
     email: Mapped[str] = mapped_column(String, index=True, unique=True)
     full_name: Mapped[str] = mapped_column(String, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, index=True)
-    role: Mapped[Role] = mapped_column(Enum(Role), index=True, default=Role.Viewer)
+
+    team_memberships = relationship(
+        "TeamMember",
+        back_populates="user",
+        cascade="all, delete-orphan"
+    )
 
     def __repr__(self):
         return f"<User {self.username}, created_at={self.created_at}, email={self.email}>"
 
+class Team(Base):
+    __tablename__ = "teams"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        primary_key=True,
+        default=uuid.uuid4,
+        unique=True,
+        index=True
+    )
+    name: Mapped[str] = mapped_column(String, unique=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, index=True)
+
+    members = relationship(
+        "TeamMember",
+        back_populates="team",
+        cascade="all, delete-orphan"
+    )
+
+class TeamRole(enum.Enum):
+    Owner = "owner"
+    Member = "member"
+
+class TeamMember(Base):
+    __tablename__ = "team_members"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id"),
+        primary_key=True
+    )
+
+    team_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("teams.id"),
+        primary_key=True
+    )
+
+    role: Mapped[TeamRole] = mapped_column(
+        Enum(TeamRole),
+        default=TeamRole.Member
+    )
+
+    joined_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.now
+    )
+
+    user = relationship(
+        "User",
+        back_populates="team_memberships"
+    )
+
+    team = relationship(
+        "Team",
+        back_populates="members"
+    )
