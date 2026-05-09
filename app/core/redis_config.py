@@ -29,3 +29,14 @@ async def check_redis_connection():
         await redis_client.ping()
     except Exception as e:
         raise RedisNotAvailable()
+
+
+async def revoke_session(session_id: str):
+    await redis_client.set(
+        f"revoked:session:{session_id}",
+        "true",
+        ex=60 * 60 * 24 * config.REFRESH_TOKEN_EXPIRE_DAYS
+    )
+
+async def is_session_revoked(session_id: str) -> bool:
+    return await redis_client.exists(f"revoked:session:{session_id}") > 0

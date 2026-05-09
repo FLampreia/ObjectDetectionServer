@@ -3,7 +3,7 @@ from fastapi.security import HTTPBearer
 from fastapi.security.http import HTTPAuthorizationCredentials
 from fastapi import WebSocket
 from sqlalchemy.orm import Session
-from app.core.redis_config import token_in_blocklist
+from app.core.redis_config import token_in_blocklist, is_session_revoked
 from app.exceptions.custom_exceptions import (
     InvalidToken,
     RefreshTokenRequired,
@@ -39,11 +39,15 @@ class TokenBearer(HTTPBearer):
             raise InvalidToken()
 
         jti = token_data.get("jti")
+        session_id = token_data.get("session_id")
 
-        if not jti:
+        if not jti or not session_id:
             raise InvalidToken()
 
         if await token_in_blocklist(jti):
+            raise InvalidToken()
+
+        if await is_session_revoked(session_id):
             raise InvalidToken()
 
         self.verify_token_data(token_data)
