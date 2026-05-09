@@ -10,6 +10,7 @@ from app.exceptions.custom_exceptions import (
     AccessTokenRequired,
     InsufficientPermission
 )
+from uuid import UUID
 from app.db.schema import User
 from app.db.database import get_db
 from app.services.user_service import UserService
@@ -26,8 +27,7 @@ class TokenBearer(HTTPBearer):
 
     async def __call__(
             self,
-            request: Request | None = None,
-            websocket: WebSocket | None = None
+            request: Request
     ) -> dict:
 
         creds: HTTPAuthorizationCredentials = await super().__call__(request)
@@ -38,7 +38,12 @@ class TokenBearer(HTTPBearer):
         if token_data is None:
             raise InvalidToken()
 
-        if await token_in_blocklist(token_data["jti"]):
+        jti = token_data.get("jti")
+
+        if not jti:
+            raise InvalidToken()
+
+        if await token_in_blocklist(jti):
             raise InvalidToken()
 
         self.verify_token_data(token_data)
@@ -51,14 +56,14 @@ class TokenBearer(HTTPBearer):
 class AccessTokenBearer(TokenBearer):
 
     def verify_token_data(self, token_data: dict) -> None:
-        if token_data.get("refresh"):
+        if token_data.get("type") != "access":
             raise AccessTokenRequired()
 
 
 class RefreshTokenBearer(TokenBearer):
 
     def verify_token_data(self, token_data: dict) -> None:
-        if not token_data.get("refresh"):
+        if token_data.get("type") != "refresh":
             raise RefreshTokenRequired()
 
 
@@ -67,9 +72,9 @@ def get_current_user(
     session: Session = Depends(get_db)
 ) -> User:
 
-    user_email = token_details["user"]["email"]
+    user_id = UUID(token_details["sub"])
     user_service = UserService(session)
-    user = user_service.get_user_by_email(user_email)
+    user = user_service.get_user(user_id)
 
     return user
 

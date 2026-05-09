@@ -6,12 +6,13 @@ from app.core.config import config
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from starlette import status
-from app.api.deps import get_user_service, get_current_user, get_current_token_payload
-from app.core.redis_config import redis_client, add_jti_to_blocklist
-from app.core.security import create_access_token, decode_token
+# from app.api.deps import get_user_service, get_current_user, get_current_token_payload
+from app.core.redis_config import redis_client, add_jti_to_blocklist, token_in_blocklist
+from app.core.security import create_token, decode_token
+from app.core.token import get_user_service, get_current_user, AccessTokenBearer, RefreshTokenBearer
 from app.db.database import SessionLocal, get_db
-from app.exceptions.custom_exceptions import InvalidCredentials, InvalidToken, InvalidSession
-from app.models.auth import RefreshRequest
+from app.exceptions.custom_exceptions import InvalidCredentials, InvalidToken, InvalidSession, MalformedToken, \
+    RevokedToken
 from app.models.user import UserRead, UserLogin, UserCreate
 from app.services.user_service import UserService
 
@@ -40,25 +41,21 @@ async def login(
 
     logged_user = service.get_user_by_email(user.email)
 
+    session_id = str(uuid.uuid4())
 
-    logger.info("Logged in user with data: %s", user)
-
-    access_token = create_access_token(
-        user_data={
-            'email': logged_user.email,
-            'user_id': str(logged_user.id),
-            'role': getattr(logged_user.role, "value", None)
-        }
+    access_token = create_token(
+        sub=str(logged_user.id),
+        session_id=session_id
     )
 
-    refresh_token = create_access_token(
-        user_data={
-            'email': logged_user.email,
-            'user_id': str(logged_user.id)
-        },
-        refresh=True,
+    refresh_token = create_token(
+        sub=str(logged_user.id),
+        session_id=session_id,
+        type="refresh",
         expires_delta=timedelta(days=config.REFRESH_TOKEN_EXPIRE_DAYS)
     )
+
+    logger.info("Logged in user with data: %s", user)
 
     return JSONResponse(
         content={
@@ -77,9 +74,9 @@ def me (
 
 @auth_router.post("/logout", status_code=status.HTTP_200_OK)
 async def logout(
-        current_token_payload = Depends(get_current_token_payload)
+        token_details: dict = Depends(AccessTokenBearer())
 ):
-    jti = current_token_payload.get("jti")
+    jti = token_details.get("jti")
 
     await add_jti_to_blocklist(jti)
 
@@ -88,4 +85,49 @@ async def logout(
             "message": "Successfully logged out"
         }
     )
+# @auth_router.post("/refresh", status_code=status.HTTP_200_OK)
+# async def refresh(
+#         token_details: dict = Depends(RefreshTokenBearer())
+# ):
 
+
+#
+# @auth_router.post("/refresh", status_code=status.HTTP_200_OK)
+# async def refresh(
+#         data: RefreshRequest
+# ):
+#     refresh_token = data.refresh_token
+#
+#     payload = decode_token(refresh_token)
+#
+#     if not payload or not payload.get("refresh"):
+#         raise InvalidToken()
+#
+#     jti = payload.get("jti")
+#     user_data = payload.get("user")
+#
+#     if not jti or not user_data:
+#         raise MalformedToken()
+#
+#     if await token_in_blocklist(jti):
+#         raise RevokedToken()
+#
+#     await add_jti_to_blocklist(jti)
+#
+#     new_access_token = create_access_token(
+#         user_data=user_data
+#     )
+#
+#     new_refresh_token = create_access_token(
+#         user_data=user_data,
+#         refresh=True,
+#         expires_delta=timedelta(days=config.REFRESH_TOKEN_EXPIRE_DAYS)
+#     )
+#
+#     return JSONResponse(
+#         content={
+#             "message": "Refresh Successful",
+#             "access_token": new_access_token,
+#             "refresh_token": new_refresh_token
+#         }
+#     )

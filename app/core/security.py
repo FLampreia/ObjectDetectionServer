@@ -6,6 +6,7 @@ from passlib.context import CryptContext
 from app.core.config import config
 import uuid
 import logging
+from typing import Literal
 
 password_context = CryptContext(
     schemes=["bcrypt"],
@@ -31,17 +32,18 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return password_context.verify(prehashed, hashed_password)
 
 
-def create_access_token(user_data: dict, expires_delta: timedelta = None, refresh: bool = False):
+def create_token(sub: str, expires_delta: timedelta = None, type: Literal["access", "refresh"] = "access", session_id: str = None):
 
     expire = datetime.now() + (
         expires_delta if expires_delta else timedelta(minutes=config.ACCESS_TOKEN_EXPIRE_MINUTES)
     )
 
     payload = {
-        'user': user_data,
+        'sub': sub,
+        'session_id': session_id,
         'exp': expire,
         'jti': str(uuid.uuid4()),
-        'refresh': refresh
+        'type': type
     }
 
     return jwt.encode(

@@ -30,7 +30,7 @@ class UserLogin(BaseModel):
 
 class UserUpdate(BaseModel):
     username: Optional[str] = None
-    email: Optional[str] = None # todo veridicar se vale a pena ter aqui o update email visto que podera ser uma cosia que nao será utilizada
+    email: Optional[str] = None # todo verificar se vale a pena ter aqui o update email visto que podera ser uma cosia que nao será utilizada
     full_name: Optional[str] = None
     password: Optional[str] = None
     role: Optional[Role] = None

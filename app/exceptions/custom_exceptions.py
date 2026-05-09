@@ -33,6 +33,10 @@ class InvalidSession(AppException):
     def __init__(self):
         super().__init__("Invalid session")
 
+class MalformedToken(AppException):
+    def __init__(self):
+        super().__init__("Malformed token")
+
 class RefreshTokenRequired(AppException):
     def __init__(self):
         super().__init__("Refresh token required")

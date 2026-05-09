@@ -10,7 +10,8 @@ from app.exceptions.custom_exceptions import (
     RevokedToken,
     RefreshTokenRequired,
     AccessTokenRequired,
-    InsufficientPermission, UserNotFound, InvalidCredentials, RedisNotAvailable, InvalidCurrentPassword, InvalidSession
+    InsufficientPermission, UserNotFound, InvalidCredentials, RedisNotAvailable, InvalidCurrentPassword, InvalidSession,
+    MalformedToken
 )
 
 
@@ -62,6 +63,13 @@ def register_all_exceptions(app: FastAPI):
         InvalidSession,
         create_exception_handler(
             status_code=status.HTTP_401_UNAUTHORIZED
+        )
+    )
+
+    app.add_exception_handler(
+        MalformedToken,
+        create_exception_handler(
+            status_code=status.HTTP_409_CONFLICT
         )
     )
 
