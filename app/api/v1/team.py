@@ -6,7 +6,7 @@ from starlette import status
 
 from app.core.deps import get_team_service
 from app.core.token import get_current_user
-from app.models.team import TeamRead, TeamCreateAndUpdate, AddTeamMember
+from app.models.team import TeamRead, TeamCreateAndUpdate, AddTeamMember, RemoveTeamMember, TeamMember
 from app.models.user import UserRead
 from app.services.team_service import TeamService
 
@@ -33,7 +33,7 @@ def get_team_list(
     logger.info("Getting team list")
 
     return service.list_teams()
-@team_router.post("/team/{team_id}/add", status_code=status.HTTP_200_OK)
+@team_router.post("/team/{team_id}/add", response_model=TeamMember, status_code=status.HTTP_200_OK)
 def add_team_member(
         team_id: uuid.UUID,
         data: AddTeamMember,
@@ -48,3 +48,27 @@ def add_team_member(
         role=data.role,
         requester_id=current_user.id,
     )
+@team_router.delete("/team/{team_id}/remove", status_code=status.HTTP_200_OK)
+def remove_team_member(
+        team_id: uuid.UUID,
+        data: RemoveTeamMember,
+        service: TeamService = Depends(get_team_service),
+        current_user = Depends(get_current_user)
+):
+    logger.info("Removing team member with data: \n\t%s \n From team: \n\t %s", data, team_id)
+
+    return service.remove_member_from_team(
+        team_id=team_id,
+        email=data.email,
+        requester_id=current_user.id,
+    )
+
+@team_router.get("/team/{team_id}/members", response_model=list[TeamMember], status_code=status.HTTP_200_OK)
+def get_team_members(
+        team_id: uuid.UUID,
+        service: TeamService = Depends(get_team_service),
+        current_user = Depends(get_current_user)
+):
+    logger.info("Getting members from team %s", team_id)
+
+    return service.get_team_members(team_id)

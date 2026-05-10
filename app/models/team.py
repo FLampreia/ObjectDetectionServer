@@ -17,3 +17,11 @@ class TeamCreateAndUpdate(BaseModel):
 class AddTeamMember(BaseModel):
     email: str
     role: TeamRole = TeamRole.Member
+
+class RemoveTeamMember(BaseModel):
+    email: str
+
+class TeamMember(BaseModel):
+    team_id: uuid.UUID
+    user_id: uuid.UUID
+    role: TeamRole

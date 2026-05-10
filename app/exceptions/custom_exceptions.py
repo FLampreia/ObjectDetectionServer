@@ -68,3 +68,7 @@ class UserAlreadyInTeam(AppException):
 class NotTeamOwner(AppException):
     def __init__(self):
         super().__init__("Not a team owner")
+
+class CannotRemoveOwner(AppException):
+    def __init__(self):
+        super().__init__("Cannot remove owner")

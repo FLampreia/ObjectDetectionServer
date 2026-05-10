@@ -3,13 +3,19 @@ from uuid import UUID
 
 from app.db.schema import TeamRole, Team, TeamMember, User
 from app.exceptions.custom_exceptions import DatabaseIntegrityException, InsufficientPermission, UserNotFound, \
-    UserAlreadyInTeam, NotTeamOwner
+    UserAlreadyInTeam, NotTeamOwner, CannotRemoveOwner
+from app.services.user_service import UserService
 
 
 class TeamService:
 
-    def __init__(self, session:Session):
+    def __init__(
+        self,
+        session: Session,
+        user_service: UserService
+    ):
         self._db = session
+        self._user_service = user_service
 
     def list_teams(self) -> list[type[Team]]:
         return self._db.query(Team).all()
@@ -46,27 +52,22 @@ class TeamService:
         self._db.commit()
         return True
 
-    def add_member_to_team(self, team_id: UUID, email: str, role: TeamRole, requester_id: UUID):
+    def add_member_to_team(
+            self,
+            team_id: UUID,
+            email: str,
+            role: TeamRole,
+            requester_id: UUID
+    ):
 
-        requester_membership  = (
-            self._db.query(TeamMember)
-            .filter_by(team_id=team_id, user_id=requester_id)
-            .first()
-        )
+        self._validate_owner(team_id, requester_id)
 
-        if not requester_membership or requester_membership.role != TeamRole.Owner:
-            raise NotTeamOwner()
-
-        user: User | None = self._db.query(User).filter_by(email=email).first()
+        user = self._user_service.get_user_by_email(email)
 
         if not user:
             raise UserNotFound()
 
-        existing = (
-            self._db.query(TeamMember)
-            .filter_by(team_id=team_id, user_id=user.id)
-            .first()
-        )
+        existing = self._get_member(team_id, user.id)
 
         if existing:
             raise UserAlreadyInTeam()
@@ -81,3 +82,56 @@ class TeamService:
         self._db.commit()
 
         return membership
+
+    def remove_member_from_team(self, team_id: UUID, email: str, requester_id: UUID):
+
+        self._validate_owner(team_id, requester_id)
+
+        user = self._user_service.get_user_by_email(email)
+
+        if not user:
+            raise UserNotFound()
+
+        membership = self._get_member(team_id, user.id)
+
+        if not membership:
+            raise UserNotFound()
+
+        # If owner, check if it's the last one
+        if membership.role == TeamRole.Owner:
+            owners_count = (
+                self._db.query(TeamMember)
+                .filter(
+                    TeamMember.team_id == team_id,
+                    TeamMember.role == TeamRole.Owner
+                )
+                .count()
+            )
+
+            if owners_count <= 1:
+                raise CannotRemoveOwner()
+
+        self._db.delete(membership)
+        self._db.commit()
+
+        return True
+
+    def get_team_members(self, team_id: UUID) -> list[type[TeamMember]]:
+
+        return self._db.query(TeamMember).filter(TeamMember.team_id == team_id).all()
+
+
+    def _validate_owner(self, team_id:UUID, requester_id:UUID):
+
+        team_member = self._get_member(team_id, requester_id)
+
+        if not team_member or team_member.role != TeamRole.Owner:
+            raise NotTeamOwner()
+
+    def _get_member(self, team_id: UUID, user_id: UUID) -> TeamMember | None:
+
+        return (
+            self._db.query(TeamMember)
+            .filter_by(team_id=team_id, user_id=user_id)
+            .first()
+        )
