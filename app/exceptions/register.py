@@ -11,7 +11,7 @@ from app.exceptions.custom_exceptions import (
     RefreshTokenRequired,
     AccessTokenRequired,
     InsufficientPermission, UserNotFound, InvalidCredentials, RedisNotAvailable, InvalidCurrentPassword, InvalidSession,
-    MalformedToken
+    MalformedToken, UserAlreadyInTeam, NotTeamOwner
 )
 
 
@@ -117,6 +117,20 @@ def register_all_exceptions(app: FastAPI):
 
     app.add_exception_handler(
         InvalidCurrentPassword,
+        create_exception_handler(
+            status_code=status.HTTP_409_CONFLICT
+        )
+    )
+
+    app.add_exception_handler(
+        UserAlreadyInTeam,
+        create_exception_handler(
+            status_code=status.HTTP_409_CONFLICT
+        )
+    )
+
+    app.add_exception_handler(
+        NotTeamOwner,
         create_exception_handler(
             status_code=status.HTTP_409_CONFLICT
         )

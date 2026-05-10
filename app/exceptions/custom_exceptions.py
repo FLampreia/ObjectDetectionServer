@@ -60,3 +60,11 @@ class RedisNotAvailable(AppException):
 class InvalidCurrentPassword (AppException):
     def __init__(self):
         super().__init__("Invalid current password")
+
+class UserAlreadyInTeam(AppException):
+    def __init__(self):
+        super().__init__("User already exists")
+
+class NotTeamOwner(AppException):
+    def __init__(self):
+        super().__init__("Not a team owner")

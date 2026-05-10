@@ -1,6 +1,7 @@
 import enum
 import uuid
 from datetime import datetime
+from typing import List
 
 from sqlalchemy import String, create_engine, DateTime, Column, Enum, ForeignKey
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker, relationship
@@ -24,7 +25,7 @@ class User(Base):
     full_name: Mapped[str] = mapped_column(String, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, index=True)
 
-    team_memberships = relationship(
+    team_memberships: Mapped[list["TeamMember"]] = relationship(
         "TeamMember",
         back_populates="user",
         cascade="all, delete-orphan"
@@ -45,7 +46,7 @@ class Team(Base):
     name: Mapped[str] = mapped_column(String, unique=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, index=True)
 
-    members = relationship(
+    members: Mapped[list["TeamMember"]] = relationship(
         "TeamMember",
         back_populates="team",
         cascade="all, delete-orphan"
@@ -78,12 +79,12 @@ class TeamMember(Base):
         default=datetime.now
     )
 
-    user = relationship(
+    user: Mapped["User"] = relationship(
         "User",
         back_populates="team_memberships"
     )
 
-    team = relationship(
+    team: Mapped["Team"] = relationship(
         "Team",
         back_populates="members"
     )

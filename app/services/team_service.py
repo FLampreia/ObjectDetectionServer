@@ -1,8 +1,9 @@
 from sqlalchemy.orm import Session
 from uuid import UUID
 
-from app.db.schema import TeamRole, Team, TeamMember
-from app.exceptions.custom_exceptions import DatabaseIntegrityException
+from app.db.schema import TeamRole, Team, TeamMember, User
+from app.exceptions.custom_exceptions import DatabaseIntegrityException, InsufficientPermission, UserNotFound, \
+    UserAlreadyInTeam, NotTeamOwner
 
 
 class TeamService:
@@ -44,3 +45,39 @@ class TeamService:
         self._db.delete(team)
         self._db.commit()
         return True
+
+    def add_member_to_team(self, team_id: UUID, email: str, role: TeamRole, requester_id: UUID):
+
+        requester_membership  = (
+            self._db.query(TeamMember)
+            .filter_by(team_id=team_id, user_id=requester_id)
+            .first()
+        )
+
+        if not requester_membership or requester_membership.role != TeamRole.Owner:
+            raise NotTeamOwner()
+
+        user: User | None = self._db.query(User).filter_by(email=email).first()
+
+        if not user:
+            raise UserNotFound()
+
+        existing = (
+            self._db.query(TeamMember)
+            .filter_by(team_id=team_id, user_id=user.id)
+            .first()
+        )
+
+        if existing:
+            raise UserAlreadyInTeam()
+
+        membership = TeamMember(
+            team_id=team_id,
+            user_id=user.id,
+            role=role
+        )
+
+        self._db.add(membership)
+        self._db.commit()
+
+        return membership
