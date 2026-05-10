@@ -44,12 +44,17 @@ class TeamService:
 
         return team
 
-    def delete_team(self, team_id: UUID) -> bool:
+    def delete_team(self, team_id: UUID, requester_id: UUID) -> bool:
+
+        self._validate_owner(team_id, requester_id)
+
         team = self.get_team(team_id)
         if not team:
             return False
+
         self._db.delete(team)
         self._db.commit()
+
         return True
 
     def add_member_to_team(

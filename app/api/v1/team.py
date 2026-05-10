@@ -72,3 +72,13 @@ def get_team_members(
     logger.info("Getting members from team %s", team_id)
 
     return service.get_team_members(team_id)
+
+@team_router.delete("/team/{team_id}")
+def delete_team(
+        team_id: uuid.UUID,
+        service: TeamService = Depends(get_team_service),
+        current_user = Depends(get_current_user)
+):
+    logger.info("Deleting team %s", team_id)
+
+    return service.delete_team(team_id, current_user.id)
