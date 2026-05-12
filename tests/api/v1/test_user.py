@@ -1,3 +1,14 @@
+
+
+def test_get_users_success(client, auth_headers):
+
+    response = client.get("/api/v1/users", headers=auth_headers)
+    assert response.status_code == 200
+    assert isinstance(response.json(), list)
+
+#
+# def test_get_users_requires_auth
+
 # from fastapi.testclient import TestClient
 #
 # from app.api.deps import get_user_service

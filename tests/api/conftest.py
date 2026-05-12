@@ -2,38 +2,52 @@ import pytest
 import uuid
 from fastapi.testclient import TestClient
 
+from app.core.security import generate_password_hash
 from app.main import create_app
 from app.db.database import get_db
 from tests.test_db import TestingSessionLocal, engine
-from app.db.schema import Base
+from app.db.schema import Base, User
 
 
 # -------------------------------------------------
 # DATABASE (isolation por teste)
 # -------------------------------------------------
-@pytest.fixture(scope="function", autouse=True)
+@pytest.fixture(scope="session", autouse=True)
 def setup_database():
     Base.metadata.create_all(bind=engine)
     yield
     Base.metadata.drop_all(bind=engine)
 
+@pytest.fixture(scope="function")
+def db_session():
 
-def override_get_db():
-    db = TestingSessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+    connection = engine.connect()
+    transaction = connection.begin()
 
+    session = TestingSessionLocal(bind=connection)
+
+    yield session
+
+    session.close()
+    if transaction.is_active:
+        transaction.rollback()
+    connection.close()
 
 # -------------------------------------------------
 # APP + CLIENT
 # -------------------------------------------------
 @pytest.fixture(scope="function")
-def app():
+def app(db_session):
+
     app = create_app(with_lifespan=False)
+
+    def override_get_db():
+        yield db_session
+
     app.dependency_overrides[get_db] = override_get_db
+
     yield app
+
     app.dependency_overrides.clear()
 
 
@@ -63,6 +77,23 @@ def create_user(client, user_payload):
         return client.post("/api/v1/signin", json=user_payload)
     return _create
 
+@pytest.fixture
+def db_user(db_session, user_payload):
+    unique = str(uuid.uuid4())[:8]
+
+    user = User(
+        username=f"db_user_{unique}",
+        email=f"db_user_{unique}@test.com",
+        password=generate_password_hash("password123"),
+        full_name="DB User"
+    )
+
+
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+
+    return user
 
 # -------------------------------------------------
 # AUTH FLOW (token único)
@@ -97,6 +128,9 @@ def login_data(client, user_payload):
     })
 
     return response.json()
+
+
+
 
 @pytest.fixture(autouse=True)
 def mock_redis(monkeypatch):
