@@ -6,7 +6,6 @@ from app.core.config import config
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from starlette import status
-# from app.api.deps import get_user_service, get_current_user, get_current_token_payload
 from app.core.redis_config import redis_client, add_jti_to_blocklist, token_in_blocklist, revoke_session, \
     is_session_revoked
 from app.core.security import create_token, decode_token
@@ -14,6 +13,7 @@ from app.core.token import get_user_service, get_current_user, AccessTokenBearer
 from app.db.database import SessionLocal, get_db
 from app.exceptions.custom_exceptions import InvalidCredentials, InvalidToken, InvalidSession, MalformedToken, \
     RevokedToken
+from app.models.token import TokenResponse
 from app.models.user import UserRead, UserLogin, UserCreate
 from app.services.user_service import UserService
 
@@ -29,7 +29,7 @@ def create_user(
     return service.create_user(user.username, user.password, user.email, user.full_name)
 
 
-@auth_router.post("/login", response_model=UserRead, status_code=status.HTTP_200_OK)
+@auth_router.post("/login", response_model=TokenResponse, status_code=status.HTTP_200_OK)
 async def login(
         user: UserLogin,
         service: UserService = Depends(get_user_service)
@@ -89,7 +89,7 @@ async def logout(
         }
     )
 
-@auth_router.post("/refresh", status_code=status.HTTP_200_OK)
+@auth_router.post("/refresh", response_model=TokenResponse, status_code=status.HTTP_200_OK)
 async def refresh(
         token_details: dict = Depends(RefreshTokenBearer())
 ):

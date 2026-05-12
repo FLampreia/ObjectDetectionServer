@@ -18,6 +18,8 @@ from app.exceptions.register import register_all_exceptions
 
 setup_logging()
 logger = logging.getLogger(__name__)
+
+# Create database tables
 Base.metadata.create_all(bind=engine)
 
 
@@ -28,32 +30,52 @@ async def life_span(app: FastAPI):
     yield
     logger.debug("Server as been stopped...")
 
+def create_app(with_lifespan: bool = True) -> FastAPI:
 
-app = FastAPI(
-    title=config.app_name,
-    description=config.description,
-    version=config.version,
-    lifespan=life_span
-)
+    lifespan = life_span if with_lifespan else None
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://192.168.1.66:3000", # pc casa mae
-        "http://192.168.1.145:3000" # pc casa leonor
-    ],
-    # allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+    fastapi_app: FastAPI = FastAPI(
+        title=config.app_name,
+        description=config.description,
+        version=config.version,
+        lifespan=lifespan
+    )
 
-register_all_exceptions(app)
+    fastapi_app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[
+            "http://localhost:3000",
+            "http://192.168.1.66:3000",  # pc casa mae
+            "http://192.168.1.145:3000"  # pc casa leonor
+        ],
+        # allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
-# Register routes
-app.include_router(user_router, prefix=f"/api/v{config.version}", tags=["Users"])
+    register_all_exceptions(fastapi_app)
 
-app.include_router(auth_router, prefix=f"/api/v{config.version}", tags=["Auth"])
+    # Register routes
+    fastapi_app.include_router(
+        user_router,
+        prefix=f"/api/v{config.version}",
+        tags=["Users"]
+    )
 
-app.include_router(team_router, prefix=f"/api/v{config.version}", tags=["Teams"])
+    fastapi_app.include_router(
+        auth_router,
+        prefix=f"/api/v{config.version}",
+        tags=["Auth"]
+    )
+
+    fastapi_app.include_router(
+        team_router,
+        prefix=f"/api/v{config.version}",
+        tags=["Teams"]
+    )
+
+    return fastapi_app
+
+
+app = create_app()

@@ -2,8 +2,7 @@ from datetime import datetime
 import uuid
 from typing import Optional
 
-from pydantic import BaseModel, Field
-
+from pydantic import BaseModel, Field, EmailStr
 
 
 class UserRead(BaseModel):
@@ -16,10 +15,10 @@ class UserRead(BaseModel):
 
 
 class UserCreate(BaseModel):
-    username: str
-    password: str
-    email: str
-    full_name: str
+    username: str = Field(min_length=1)
+    password: str = Field(min_length=8)
+    email: EmailStr
+    full_name: str = Field(min_length=1)
 
 
 class UserLogin(BaseModel):

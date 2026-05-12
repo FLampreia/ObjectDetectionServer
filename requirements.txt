@@ -1,3 +1,4 @@
+pydantic==2.12.5
 fastapi>=0.135.1
 httpx>=0.28.1
 pydantic-settings>=2.13.1
@@ -10,3 +11,9 @@ passlib==1.7.4
 bcrypt==4.0.1
 aioredis==2.0.1
 redis==7.3.0
+email-validator==2.3.0
+
+
+# Tests
+coverage==7.14.0
+pytest-cov==7.1.0
