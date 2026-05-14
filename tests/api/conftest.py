@@ -1,16 +1,23 @@
+from unittest.mock import MagicMock
+
 import pytest
 import uuid
 from fastapi.testclient import TestClient
+from pydantic.v1 import EmailStr
 
+from app.core.config import config
+from app.core.deps import get_user_service
 from app.core.security import generate_password_hash
 from app.main import create_app
 from app.db.database import get_db
 from tests.test_db import TestingSessionLocal, engine
 from app.db.schema import Base, User
 
+URL = f"/api/v{config.version}"
+
 
 # -------------------------------------------------
-# DATABASE (isolation por teste)
+# DATABASE (testes isolation)
 # -------------------------------------------------
 @pytest.fixture(scope="session", autouse=True)
 def setup_database():
@@ -18,9 +25,9 @@ def setup_database():
     yield
     Base.metadata.drop_all(bind=engine)
 
+
 @pytest.fixture(scope="function")
 def db_session():
-
     connection = engine.connect()
     transaction = connection.begin()
 
@@ -33,12 +40,12 @@ def db_session():
         transaction.rollback()
     connection.close()
 
+
 # -------------------------------------------------
 # APP + CLIENT
 # -------------------------------------------------
 @pytest.fixture(scope="function")
 def app(db_session):
-
     app = create_app(with_lifespan=False)
 
     def override_get_db():
@@ -57,7 +64,7 @@ def client(app):
 
 
 # -------------------------------------------------
-# USER FIXTURE (único e isolado)
+# USER FIXTURE
 # -------------------------------------------------
 @pytest.fixture
 def user_payload():
@@ -71,23 +78,26 @@ def user_payload():
     }
 
 
+# Create user through API
 @pytest.fixture
 def create_user(client, user_payload):
     def _create():
-        return client.post("/api/v1/signin", json=user_payload)
+        return client.post(f"{URL}/signin", json=user_payload)
+
     return _create
 
+
+# Create user through Database
 @pytest.fixture
 def db_user(db_session, user_payload):
     unique = str(uuid.uuid4())[:8]
 
     user = User(
         username=f"db_user_{unique}",
-        email=f"db_user_{unique}@test.com",
+        email=EmailStr(f"db_user_{unique}@test.com"),
         password=generate_password_hash("password123"),
         full_name="DB User"
     )
-
 
     db_session.add(user)
     db_session.commit()
@@ -95,14 +105,21 @@ def db_user(db_session, user_payload):
 
     return user
 
+
+@pytest.fixture
+def current_user(client, auth_headers):
+    response = client.get(f"{URL}/me", headers=auth_headers)
+    return response.json()
+
+
 # -------------------------------------------------
-# AUTH FLOW (token único)
+# AUTH FLOW (authenticate suer)
 # -------------------------------------------------
 @pytest.fixture
 def auth_token(client, create_user, user_payload):
     create_user()
 
-    response = client.post("/api/v1/login", json={
+    response = client.post(f"{URL}/login", json={
         "email": user_payload["email"],
         "password": user_payload["password"]
     })
@@ -115,14 +132,41 @@ def auth_headers(auth_token):
     return {"Authorization": f"Bearer {auth_token}"}
 
 
+@pytest.fixture
+def authenticated_user(client, user_payload):
+    client.post("/api/v1/signin", json=user_payload)
+
+    response = client.post(
+        "/api/v1/login",
+        json={
+            "email": user_payload["email"],
+            "password": user_payload["password"]
+        }
+    )
+
+    data = response.json()
+
+    return {
+        "user": user_payload,
+        "access_token": data["access_token"],
+        "refresh_token": data["refresh_token"],
+        "access_headers": {
+            "Authorization": f"Bearer {data['access_token']}"
+        },
+        "refresh_headers": {
+            "Authorization": f"Bearer {data['refresh_token']}"
+        }
+    }
+
+
 # -------------------------------------------------
-# FULL LOGIN (inclui refresh se necessário)
+# FULL LOGIN (return tokens)
 # -------------------------------------------------
 @pytest.fixture
 def login_data(client, user_payload):
-    client.post("/api/v1/signin", json=user_payload)
+    client.post(f"{URL}/signin", json=user_payload)
 
-    response = client.post("/api/v1/login", json={
+    response = client.post(f"{URL}/login", json={
         "email": user_payload["email"],
         "password": user_payload["password"]
     })
@@ -130,11 +174,11 @@ def login_data(client, user_payload):
     return response.json()
 
 
-
-
+# -------------------------------------------------
+# MOCKS
+# -------------------------------------------------
 @pytest.fixture(autouse=True)
 def mock_redis(monkeypatch):
-
     blocked_jtis = set()
     revoked_sessions = set()
 
@@ -181,3 +225,11 @@ def mock_redis(monkeypatch):
         "app.api.v1.auth.revoke_session",
         fake_revoke_session
     )
+
+
+@pytest.fixture
+def mock_user_service(client):
+    service = MagicMock()
+    client.app.dependency_overrides[get_user_service] = lambda: service
+    yield service
+    client.app.dependency_overrides.clear()

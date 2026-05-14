@@ -3,6 +3,7 @@ import uuid
 from datetime import datetime
 from typing import List
 
+from pydantic import EmailStr
 from sqlalchemy import String, create_engine, DateTime, Column, Enum, ForeignKey
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker, relationship
 
@@ -21,7 +22,7 @@ class User(Base):
     )
     username: Mapped[str] = mapped_column(String, index=True, unique=True)
     password: Mapped[str] = mapped_column(String, index=True)
-    email: Mapped[str] = mapped_column(String, index=True, unique=True)
+    email: Mapped[EmailStr] = mapped_column(String, index=True, unique=True)
     full_name: Mapped[str] = mapped_column(String, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, index=True)
 

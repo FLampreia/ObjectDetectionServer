@@ -69,6 +69,18 @@ class NotTeamOwner(AppException):
     def __init__(self):
         super().__init__("Not a team owner")
 
-class CannotRemoveOwner(AppException):
+class NotAllowedToRemoveOwner(AppException):
     def __init__(self):
         super().__init__("Cannot remove owner")
+
+class NotAllowedToUpdate(AppException):
+    def __init__(self):
+        super().__init__("Not allowed to update")
+
+class NotAllowedToDelete(AppException):
+    def __init__(self):
+        super().__init__("Not allowed to delete")
+
+class NoFieldsToUpdate(AppException):
+    def __init__(self):
+        super().__init__("At least one field must be provided for update")

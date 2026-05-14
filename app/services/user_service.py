@@ -1,6 +1,7 @@
 from sqlite3 import IntegrityError
 from uuid import UUID
 from fastapi import HTTPException, status
+from pydantic import EmailStr
 from sqlalchemy.orm import Session
 
 from app.core.security import generate_password_hash, verify_password
@@ -10,7 +11,7 @@ from app.exceptions.custom_exceptions import (
     UsernameAlreadyExists,
     DatabaseIntegrityException,
     EmailNotFound,
-    InvalidCredentials, InvalidCurrentPassword
+    InvalidCredentials, InvalidCurrentPassword, UserNotFound, NoFieldsToUpdate
 )
 
 
@@ -24,7 +25,7 @@ class UserService:
     def get_user(self, user_id: UUID) -> User | None:
         return self._db.query(User).filter(User.id == user_id).first()
 
-    def create_user(self, username: str, password: str, email: str, full_name: str) -> User:
+    def create_user(self, username: str, password: str, email: EmailStr, full_name: str) -> User:
         user = User(
             username=username,
             password=generate_password_hash(password),
@@ -53,10 +54,14 @@ class UserService:
             raise DatabaseIntegrityException()
 
     def update_user_partial(self, user_id: UUID, username: str | None, password: str | None, full_name: str | None, current_password: str | None) -> User | None:
+
         user = self.get_user(user_id)
 
         if not user:
-            return None
+            raise UserNotFound()
+
+        if all(field is None for field in [username, password, full_name]):
+            raise NoFieldsToUpdate()
 
         if username is not None:
             user.username = username
@@ -86,19 +91,13 @@ class UserService:
         self._db.commit()
         return True
 
-    def get_user_by_email(self, user_email: str) -> User | None:
+    def get_user_by_email(self, user_email: EmailStr) -> User | None:
 
         user = self._db.query(User).filter(User.email == user_email).first()
 
         return user
 
-    def user_exists_by_email(self, email: str):
-
-        user = self.get_user_by_email(email)
-
-        return True if user is not None else False
-
-    def verify_login(self, email: str, password: str) -> bool:
+    def verify_login(self, email: EmailStr, password: str) -> bool:
         user = self.get_user_by_email(email)
 
         if not user:

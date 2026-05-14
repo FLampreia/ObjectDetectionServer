@@ -2,8 +2,7 @@ from sqlalchemy.orm import Session
 from uuid import UUID
 
 from app.db.schema import TeamRole, Team, TeamMember, User
-from app.exceptions.custom_exceptions import DatabaseIntegrityException, InsufficientPermission, UserNotFound, \
-    UserAlreadyInTeam, NotTeamOwner, CannotRemoveOwner
+from app.exceptions.custom_exceptions import UserNotFound, UserAlreadyInTeam, NotTeamOwner, NotAllowedToRemoveOwner
 from app.services.user_service import UserService
 
 
@@ -114,7 +113,7 @@ class TeamService:
             )
 
             if owners_count <= 1:
-                raise CannotRemoveOwner()
+                raise NotAllowedToRemoveOwner()
 
         self._db.delete(membership)
         self._db.commit()

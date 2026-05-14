@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.core.deps import get_user_service
 from app.core.token import get_current_user
 from app.db.database import get_db
-from app.exceptions.custom_exceptions import UserNotFound
+from app.exceptions.custom_exceptions import UserNotFound, NotAllowedToUpdate, NotAllowedToDelete
 from app.models.user import UserCreate, UserRead, UserUpdate
 from app.services.user_service import UserService
 
@@ -40,6 +40,8 @@ def update_user_partial(
         service: UserService = Depends(get_user_service),
         current_user = Depends(get_current_user)
 ):
+    if user_id != current_user.id:
+        raise NotAllowedToUpdate()
 
     logger.info("Updating user with id: %s", user_id)
 
@@ -51,9 +53,6 @@ def update_user_partial(
         current_password= user.current_password,
     )
 
-    if not updated:
-        raise UserNotFound()
-
     return updated
 
 @user_router.delete("/users/{user_id}")
@@ -61,6 +60,9 @@ def delete_user(
         user_id: UUID, service: UserService = Depends(get_user_service),
         current_user = Depends(get_current_user)
 ):
+    if user_id != current_user.id:
+        raise NotAllowedToDelete()
+
     logger.info("Deleting user with id: %s", user_id)
     success = service.delete_user(user_id)
     if not success:

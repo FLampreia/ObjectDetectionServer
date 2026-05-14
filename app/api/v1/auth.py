@@ -85,7 +85,7 @@ async def logout(
 
     return JSONResponse(
         content={
-            "message": "Successfully logged out"
+            "success": True
         }
     )
 
