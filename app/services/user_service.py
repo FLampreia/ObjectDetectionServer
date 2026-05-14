@@ -53,7 +53,8 @@ class UserService:
 
             raise DatabaseIntegrityException()
 
-    def update_user_partial(self, user_id: UUID, username: str | None, password: str | None, full_name: str | None, current_password: str | None) -> User | None:
+    def update_user_partial(self, user_id: UUID, username: str | None, password: str | None, full_name: str | None,
+                            current_password: str | None) -> User | None:
 
         user = self.get_user(user_id)
 
@@ -64,6 +65,16 @@ class UserService:
             raise NoFieldsToUpdate()
 
         if username is not None:
+
+            existing_user = (
+                self._db.query(User)
+                .filter(User.username == username)
+                .first()
+            )
+
+            if existing_user and existing_user.id != user.id:
+                raise UsernameAlreadyExists()
+
             user.username = username
 
         if full_name is not None:
@@ -104,4 +115,3 @@ class UserService:
             return False
 
         return verify_password(password, str(user.password))
-

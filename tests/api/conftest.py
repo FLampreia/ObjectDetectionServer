@@ -81,11 +81,8 @@ def user_payload():
 # Create user through API
 @pytest.fixture
 def create_user(client, user_payload):
-    def _create():
-        return client.post(f"{URL}/signin", json=user_payload)
 
-    return _create
-
+    return client.post(f"{URL}/signin", json=user_payload)
 
 # Create user through Database
 @pytest.fixture
@@ -115,9 +112,9 @@ def current_user(client, auth_headers):
 # -------------------------------------------------
 # AUTH FLOW (authenticate suer)
 # -------------------------------------------------
+#todo verificar se vale a pena ter auth_token e auth_headers quando tenho authenticated_user
 @pytest.fixture
 def auth_token(client, create_user, user_payload):
-    create_user()
 
     response = client.post(f"{URL}/login", json={
         "email": user_payload["email"],

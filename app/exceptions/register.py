@@ -18,7 +18,7 @@ EXCEPTION_STATUS_MAP = {
     UserNotFound: status.HTTP_404_NOT_FOUND,
     InvalidCredentials: status.HTTP_401_UNAUTHORIZED,
     RedisNotAvailable: status.HTTP_503_SERVICE_UNAVAILABLE,
-    InvalidCurrentPassword: status.HTTP_401_UNAUTHORIZED,
+    InvalidCurrentPassword: status.HTTP_400_BAD_REQUEST,
     UserAlreadyInTeam: status.HTTP_409_CONFLICT,
     NotTeamOwner: status.HTTP_403_FORBIDDEN,
     NotAllowedToRemoveOwner: status.HTTP_403_FORBIDDEN,
