@@ -65,7 +65,6 @@ def delete_user(
 
     logger.info("Deleting user with id: %s", user_id)
     success = service.delete_user(user_id)
-    if not success:
-        raise UserNotFound()
-    return {"success":True}
+
+    return {"success": success}
 
