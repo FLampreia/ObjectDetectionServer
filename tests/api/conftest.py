@@ -3,42 +3,56 @@ from unittest.mock import MagicMock
 import pytest
 import uuid
 from fastapi.testclient import TestClient
-from pydantic.v1 import EmailStr
-
-from app.core.config import config
+from sqlalchemy import create_engine, StaticPool
+from sqlalchemy.orm import sessionmaker
 from app.core.deps import get_user_service
-from app.core.security import generate_password_hash
 from app.main import create_app
 from app.db.database import get_db
-from tests.test_db import TestingSessionLocal, test_engine
-from app.db.schema import Base, User
 
-URL = f"/api/v{config.version}"
+URL = f"/api/v1"
+
+# Set up the in-memory SQLite database for testing
+DATABASE_URL = "sqlite:///:memory:"
+
+test_engine = create_engine(
+    DATABASE_URL,
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool,
+)
+
+TestingSessionLocal = sessionmaker(
+    autocommit=False,
+    autoflush=False,
+    bind=test_engine
+)
 
 
 # -------------------------------------------------
-# DATABASE (testes isolation)
+# DATABASE (tests isolation)
 # -------------------------------------------------
-@pytest.fixture(scope="session", autouse=True)
-def setup_database():
-    Base.metadata.create_all(bind=test_engine)
-    yield
-    Base.metadata.drop_all(bind=test_engine)
-
+# @pytest.fixture(scope="session", autouse=True)
+# def setup_database():
+#     Base.metadata.create_all(bind=test_engine)
+#     yield
+#     Base.metadata.drop_all(bind=test_engine)
+#
 
 @pytest.fixture(scope="function")
 def db_session():
     connection = test_engine.connect()
     transaction = connection.begin()
 
-    session = TestingSessionLocal(bind=connection)
+    db = TestingSessionLocal(bind=connection)
 
-    yield session
+    try:
+        yield db
+    finally:
+        db.close()
 
-    session.close()
-    if transaction.is_active:
-        transaction.rollback()
-    connection.close()
+        if transaction.is_active:
+            transaction.rollback()
+
+        connection.close()
 
 
 # -------------------------------------------------
@@ -46,7 +60,8 @@ def db_session():
 # -------------------------------------------------
 @pytest.fixture(scope="function")
 def app(db_session):
-    app = create_app(engine=test_engine, with_lifespan=False)
+
+    app = create_app(engine=test_engine , with_lifespan=False)
 
     def override_get_db():
         yield db_session
@@ -84,25 +99,6 @@ def create_user(client, user_payload):
     response = client.post(f"{URL}/signin", json=user_payload)
     assert response.status_code == 201
     return response.json()
-
-
-# Create user through Database
-@pytest.fixture
-def db_user(db_session, user_payload):
-    unique = str(uuid.uuid4())[:8]
-
-    user = User(
-        username=f"db_user_{unique}",
-        email=EmailStr(f"db_user_{unique}@test.com"),
-        password=generate_password_hash("password123"),
-        full_name="DB User"
-    )
-
-    db_session.add(user)
-    db_session.commit()
-    db_session.refresh(user)
-
-    return user
 
 
 @pytest.fixture
@@ -273,7 +269,7 @@ def second_user_payload():
 
 
 @pytest.fixture
-def second_user(client, second_user_payload):
+def create_second_user(client, second_user_payload):
     response = client.post(
         f"{URL}/signin",
         json=second_user_payload
@@ -285,7 +281,7 @@ def second_user(client, second_user_payload):
 
 
 @pytest.fixture
-def auth_headers_second_user(client, second_user, second_user_payload):
+def auth_headers_second_user(client, create_second_user, second_user_payload):
     response = client.post(
         f"{URL}/login",
         json={

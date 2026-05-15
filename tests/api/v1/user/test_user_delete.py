@@ -13,9 +13,9 @@ def test_delete_user_success(client, auth_headers, current_user):
 
 # delete is only possible for the logged account
 # cannot delete other account besides the logged one
-def test_delete_other_user(client, auth_headers, db_user):
+def test_delete_other_user(client, auth_headers, create_second_user):
     response = client.delete(
-        f"{URL}/users/{db_user.id}",
+        f"{URL}/users/{create_second_user["id"]}",
         headers=auth_headers,
     )
 

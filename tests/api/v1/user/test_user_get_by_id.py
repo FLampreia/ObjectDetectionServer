@@ -5,16 +5,16 @@ import pytest
 from tests.api.conftest import URL
 
 
-def test_get_user_by_id_success(client, auth_headers, db_user):
-    response = client.get(f"{URL}/users/{db_user.id}", headers=auth_headers)
+def test_get_user_by_id_success(client, auth_headers, current_user):
+    response = client.get(f"{URL}/users/{current_user["id"]}", headers=auth_headers)
     assert response.status_code == 200
 
     data = response.json()
 
-    assert data["id"] == str(db_user.id)
-    assert data["username"] == db_user.username
-    assert data["email"] == db_user.email
-    assert data["full_name"] == db_user.full_name
+    assert data["id"] == str(current_user["id"])
+    assert data["username"] == current_user["username"]
+    assert data["email"] == current_user["email"]
+    assert data["full_name"] == current_user["full_name"]
 
 
 def test_get_user_by_id_not_found(client, auth_headers):

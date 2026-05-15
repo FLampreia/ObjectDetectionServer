@@ -6,7 +6,6 @@ from sqlalchemy.orm import Session
 
 from app.core.deps import get_user_service
 from app.core.token import get_current_user
-from app.db.database import get_db
 from app.exceptions.custom_exceptions import UserNotFound, NotAllowedToUpdate, NotAllowedToDelete
 from app.models.user import UserCreate, UserRead, UserUpdate
 from app.services.user_service import UserService

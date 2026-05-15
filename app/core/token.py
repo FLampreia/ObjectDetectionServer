@@ -1,8 +1,7 @@
 from fastapi import Request, Depends
 from fastapi.security import HTTPBearer
 from fastapi.security.http import HTTPAuthorizationCredentials
-from fastapi import WebSocket
-from sqlalchemy.orm import Session
+
 
 from app.core.deps import get_user_service
 from app.core.redis_config import token_in_blocklist, is_session_revoked
@@ -14,8 +13,6 @@ from app.exceptions.custom_exceptions import (
 )
 from uuid import UUID
 from app.db.schema import User
-from app.db.database import get_db
-from app.services.team_service import TeamService
 from app.services.user_service import UserService
 from app.core.security import decode_token
 

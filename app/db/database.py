@@ -20,7 +20,7 @@ SessionLocal = sessionmaker(
 )
 
 # Create a session each time there is a request, and closes it when its finished
-def get_db() -> Generator[Session, None, None]:
+def get_db():
 
     db = SessionLocal()
     try:

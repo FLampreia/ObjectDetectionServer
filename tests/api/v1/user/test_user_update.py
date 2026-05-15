@@ -100,9 +100,9 @@ def test_update_user_partial_single_field_success(
     assert response.status_code == 200
 
 
-def test_update_other_user_partial(client, auth_headers, db_user):
+def test_update_other_user_partial(client, auth_headers, create_second_user):
     response = client.patch(
-        f"{URL}/users/{db_user.id}",
+        f"{URL}/users/{create_second_user["id"]}",
         headers=auth_headers,
         json={
             "username": "new_username",
@@ -130,13 +130,13 @@ def test_update_user_partial_username_already_exists(
         client,
         auth_headers,
         current_user,
-        db_user
+        create_second_user
 ):
     response = client.patch(
         f"{URL}/users/{current_user['id']}",
         headers=auth_headers,
         json={
-            "username": db_user.username
+            "username": create_second_user["username"]
         }
     )
 
