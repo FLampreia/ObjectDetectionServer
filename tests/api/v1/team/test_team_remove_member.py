@@ -1,0 +1,8 @@
+# test_remove_team_member_success
+# test_remove_team_member_requires_auth
+# test_remove_team_member_team_not_found
+# test_remove_team_member_user_not_in_team
+# test_remove_team_member_non_owner_forbidden
+# test_remove_team_member_invalid_team_id
+# test_remove_team_member_missing_email
+# test_remove_team_member_remove_owner_forbidden (se existir essa regra)

@@ -5,7 +5,7 @@ from sqlalchemy.orm import sessionmaker
 # Set up the in-memory SQLite database for testing
 DATABASE_URL = "sqlite:///:memory:"
 
-engine = create_engine(
+test_engine = create_engine(
     DATABASE_URL,
     connect_args={"check_same_thread": False},
     poolclass=StaticPool,
@@ -14,5 +14,5 @@ engine = create_engine(
 TestingSessionLocal = sessionmaker(
     autocommit=False,
     autoflush=False,
-    bind=engine
+    bind=test_engine
 )

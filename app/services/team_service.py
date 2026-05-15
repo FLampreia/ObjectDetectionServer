@@ -1,23 +1,33 @@
+from pydantic import EmailStr
 from sqlalchemy.orm import Session
 from uuid import UUID
 
 from app.db.schema import TeamRole, Team, TeamMember, User
-from app.exceptions.custom_exceptions import UserNotFound, UserAlreadyInTeam, NotTeamOwner, NotAllowedToRemoveOwner
+from app.exceptions.custom_exceptions import UserNotFound, UserAlreadyInTeam, NotTeamOwner, NotAllowedToRemoveOwner, \
+    EmailAlreadyExists, UsernameAlreadyExists, DatabaseIntegrityException, TeamNameAlreadyExists, TeamNotFound
 from app.services.user_service import UserService
 
 
 class TeamService:
 
     def __init__(
-        self,
-        session: Session,
-        user_service: UserService
+            self,
+            session: Session,
+            user_service: UserService
     ):
         self._db = session
         self._user_service = user_service
 
     def list_teams(self) -> list[type[Team]]:
         return self._db.query(Team).all()
+
+    def list_user_teams(self, user_id: UUID) -> list[type[Team]]:
+        return (
+            self._db.query(Team)
+            .join(TeamMember, TeamMember.team_id == Team.id)
+            .filter(TeamMember.user_id == user_id)
+            .all()
+        )
 
     def get_team(self, team_id: UUID) -> Team | None:
         return self._db.query(Team).filter(Team.id == team_id).first()
@@ -28,28 +38,39 @@ class TeamService:
         )
 
         self._db.add(team)
-        self._db.flush()
 
-        owner_membership = TeamMember(
-            team_id=team.id,
-            user_id=owner_id,
-            role=TeamRole.Owner
-        )
+        try:
+            self._db.flush()
 
-        self._db.add(owner_membership)
+            owner_membership = TeamMember(
+                team_id=team.id,
+                user_id=owner_id,
+                role=TeamRole.Owner
+            )
+            self._db.add(owner_membership)
 
-        self._db.commit()
-        self._db.refresh(team)
+            self._db.commit()
+            self._db.refresh(team)
 
-        return team
+            return team
+
+        # In case data already exists
+        except Exception as e:
+            self._db.rollback()
+            error_message = str(e)
+
+            if "teams.name" in error_message:
+                raise TeamNameAlreadyExists()
+
+            raise DatabaseIntegrityException()
 
     def delete_team(self, team_id: UUID, requester_id: UUID) -> bool:
 
-        self._validate_owner(team_id, requester_id)
-
         team = self.get_team(team_id)
         if not team:
-            return False
+            raise TeamNotFound()
+
+        self._validate_owner(team_id, requester_id)
 
         self._db.delete(team)
         self._db.commit()
@@ -59,7 +80,7 @@ class TeamService:
     def add_member_to_team(
             self,
             team_id: UUID,
-            email: str,
+            email: EmailStr,
             role: TeamRole,
             requester_id: UUID
     ):
@@ -79,7 +100,7 @@ class TeamService:
         membership = TeamMember(
             team_id=team_id,
             user_id=user.id,
-            role=role
+            role=TeamRole.Member
         )
 
         self._db.add(membership)
@@ -87,7 +108,7 @@ class TeamService:
 
         return membership
 
-    def remove_member_from_team(self, team_id: UUID, email: str, requester_id: UUID):
+    def remove_member_from_team(self, team_id: UUID, email: EmailStr, requester_id: UUID):
 
         self._validate_owner(team_id, requester_id)
 
@@ -124,8 +145,7 @@ class TeamService:
 
         return self._db.query(TeamMember).filter(TeamMember.team_id == team_id).all()
 
-
-    def _validate_owner(self, team_id:UUID, requester_id:UUID):
+    def _validate_owner(self, team_id: UUID, requester_id: UUID):
 
         team_member = self._get_member(team_id, requester_id)
 

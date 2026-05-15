@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, EmailStr
 
 from app.db.schema import TeamRole
 
@@ -15,11 +15,11 @@ class TeamCreateAndUpdate(BaseModel):
     name: str = Field(min_length=1)
 
 class AddTeamMember(BaseModel):
-    email: str
+    email: EmailStr
     role: TeamRole = TeamRole.Member
 
 class RemoveTeamMember(BaseModel):
-    email: str
+    email: EmailStr
 
 class TeamMember(BaseModel):
     team_id: uuid.UUID

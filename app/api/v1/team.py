@@ -13,11 +13,12 @@ from app.services.team_service import TeamService
 team_router = APIRouter()
 logger = logging.getLogger(__name__)
 
+
 @team_router.post("/team", response_model=TeamRead, status_code=status.HTTP_201_CREATED)
 def create_team(
         team: TeamCreateAndUpdate,
         service: TeamService = Depends(get_team_service),
-        current_user = Depends(get_current_user)
+        current_user=Depends(get_current_user)
 ):
     logger.info("Creating team with data: %s", team)
 
@@ -25,20 +26,33 @@ def create_team(
         team.name,
         current_user.id
     )
+
+
 @team_router.get("/team", response_model=list[TeamRead], status_code=status.HTTP_200_OK)
-def get_team_list(
+def get_all_team_list(
         service: TeamService = Depends(get_team_service),
-        current_user = Depends(get_current_user)
+        current_user=Depends(get_current_user)
 ):
     logger.info("Getting team list")
 
     return service.list_teams()
+
+
+@team_router.get("/team/logged", response_model=list[TeamRead], status_code=status.HTTP_200_OK)
+def get_logged_user_team_list(
+        service: TeamService = Depends(get_team_service),
+        current_user=Depends(get_current_user)
+):
+    logger.info("Getting logged user team list")
+    return service.list_user_teams(current_user.id)
+
+
 @team_router.post("/team/{team_id}/add", response_model=TeamMember, status_code=status.HTTP_200_OK)
 def add_team_member(
         team_id: uuid.UUID,
         data: AddTeamMember,
         service: TeamService = Depends(get_team_service),
-        current_user = Depends(get_current_user)
+        current_user=Depends(get_current_user)
 ):
     logger.info("Adding team member with data: \n\t%s \n To team: \n\t %s", data, team_id)
 
@@ -48,12 +62,14 @@ def add_team_member(
         role=data.role,
         requester_id=current_user.id,
     )
+
+
 @team_router.delete("/team/{team_id}/remove", status_code=status.HTTP_200_OK)
 def remove_team_member(
         team_id: uuid.UUID,
         data: RemoveTeamMember,
         service: TeamService = Depends(get_team_service),
-        current_user = Depends(get_current_user)
+        current_user=Depends(get_current_user)
 ):
     logger.info("Removing team member with data: \n\t%s \n From team: \n\t %s", data, team_id)
 
@@ -63,21 +79,23 @@ def remove_team_member(
         requester_id=current_user.id,
     )
 
+
 @team_router.get("/team/{team_id}/members", response_model=list[TeamMember], status_code=status.HTTP_200_OK)
 def get_team_members(
         team_id: uuid.UUID,
         service: TeamService = Depends(get_team_service),
-        current_user = Depends(get_current_user)
+        current_user=Depends(get_current_user)
 ):
     logger.info("Getting members from team %s", team_id)
 
     return service.get_team_members(team_id)
 
-@team_router.delete("/team/{team_id}")
+
+@team_router.delete("/team/{team_id}", status_code=status.HTTP_200_OK)
 def delete_team(
         team_id: uuid.UUID,
         service: TeamService = Depends(get_team_service),
-        current_user = Depends(get_current_user)
+        current_user=Depends(get_current_user)
 ):
     logger.info("Deleting team %s", team_id)
 

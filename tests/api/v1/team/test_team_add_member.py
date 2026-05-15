@@ -1,0 +1,10 @@
+# test_add_team_member_success
+# test_add_team_member_requires_auth
+# test_add_team_member_team_not_found
+# test_add_team_member_user_not_found
+# test_add_team_member_already_in_team
+# test_add_team_member_invalid_role
+# test_add_team_member_non_owner_forbidden
+# test_add_team_member_invalid_team_id
+# test_add_team_member_missing_email
+# test_add_team_member_missing_role

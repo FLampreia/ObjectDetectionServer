@@ -25,6 +25,8 @@ EXCEPTION_STATUS_MAP = {
     NotAllowedToUpdate: status.HTTP_403_FORBIDDEN,
     NoFieldsToUpdate: status.HTTP_400_BAD_REQUEST,
     NotAllowedToDelete: status.HTTP_403_FORBIDDEN,
+    TeamNameAlreadyExists: status.HTTP_409_CONFLICT,
+    TeamNotFound: status.HTTP_404_NOT_FOUND,
 }
 
 
