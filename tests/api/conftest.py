@@ -10,7 +10,7 @@ from app.core.deps import get_user_service
 from app.core.security import generate_password_hash
 from app.main import create_app
 from app.db.database import get_db
-from tests.test_db import TestingSessionLocal, engine
+from tests.test_db import TestingSessionLocal, test_engine
 from app.db.schema import Base, User
 
 URL = f"/api/v{config.version}"
@@ -21,14 +21,14 @@ URL = f"/api/v{config.version}"
 # -------------------------------------------------
 @pytest.fixture(scope="session", autouse=True)
 def setup_database():
-    Base.metadata.create_all(bind=engine)
+    Base.metadata.create_all(bind=test_engine)
     yield
-    Base.metadata.drop_all(bind=engine)
+    Base.metadata.drop_all(bind=test_engine)
 
 
 @pytest.fixture(scope="function")
 def db_session():
-    connection = engine.connect()
+    connection = test_engine.connect()
     transaction = connection.begin()
 
     session = TestingSessionLocal(bind=connection)
@@ -46,7 +46,7 @@ def db_session():
 # -------------------------------------------------
 @pytest.fixture(scope="function")
 def app(db_session):
-    app = create_app(with_lifespan=False)
+    app = create_app(engine=test_engine, with_lifespan=False)
 
     def override_get_db():
         yield db_session
@@ -81,8 +81,10 @@ def user_payload():
 # Create user through API
 @pytest.fixture
 def create_user(client, user_payload):
+    response = client.post(f"{URL}/signin", json=user_payload)
+    assert response.status_code == 201
+    return response.json()
 
-    return client.post(f"{URL}/signin", json=user_payload)
 
 # Create user through Database
 @pytest.fixture
@@ -112,10 +114,9 @@ def current_user(client, auth_headers):
 # -------------------------------------------------
 # AUTH FLOW (authenticate suer)
 # -------------------------------------------------
-#todo verificar se vale a pena ter auth_token e auth_headers quando tenho authenticated_user
+# todo verificar se vale a pena ter auth_token e auth_headers quando tenho authenticated_user
 @pytest.fixture
 def auth_token(client, create_user, user_payload):
-
     response = client.post(f"{URL}/login", json={
         "email": user_payload["email"],
         "password": user_payload["password"]
@@ -230,3 +231,73 @@ def mock_user_service(client):
     client.app.dependency_overrides[get_user_service] = lambda: service
     yield service
     client.app.dependency_overrides.clear()
+
+
+# -------------------------------------------------
+# TEAM
+# -------------------------------------------------
+@pytest.fixture
+def team_payload():
+    unique = str(uuid.uuid4())[:8]
+
+    return {
+        "name": f"team_{unique}"
+    }
+
+
+@pytest.fixture
+def created_team(client, auth_headers, team_payload):
+    response = client.post(
+        f"{URL}/team",
+        headers=auth_headers,
+        json=team_payload
+    )
+    assert response.status_code == 201
+
+    return response.json()
+
+
+# -------------------------------------------------
+# SECOND USER
+# -------------------------------------------------
+@pytest.fixture
+def second_user_payload():
+    unique = str(uuid.uuid4())[:8]
+
+    return {
+        "username": f"second_user_{unique}",
+        "email": f"second_user_{unique}@test.com",
+        "password": "password123",
+        "full_name": "Second User"
+    }
+
+
+@pytest.fixture
+def second_user(client, second_user_payload):
+    response = client.post(
+        f"{URL}/signin",
+        json=second_user_payload
+    )
+
+    assert response.status_code == 201
+
+    return response.json()
+
+
+@pytest.fixture
+def auth_headers_second_user(client, second_user, second_user_payload):
+    response = client.post(
+        f"{URL}/login",
+        json={
+            "email": second_user_payload["email"],
+            "password": second_user_payload["password"]
+        }
+    )
+
+    assert response.status_code == 200
+
+    token = response.json()["access_token"]
+
+    return {
+        "Authorization": f"Bearer {token}"
+    }

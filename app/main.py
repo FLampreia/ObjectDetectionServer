@@ -13,14 +13,13 @@ from app.core.config import config
 from app.core.logging_config import setup_logging
 from app.core.redis_config import check_redis_connection
 from app.db.schema import Base
-from app.db.database import engine
+from app.db.database import engine as default_engine
 from app.exceptions.register import register_all_exceptions
 
 setup_logging()
 logger = logging.getLogger(__name__)
 
-# Create database tables
-Base.metadata.create_all(bind=engine)
+
 
 
 @asynccontextmanager
@@ -30,7 +29,13 @@ async def life_span(app: FastAPI):
     yield
     logger.debug("Server as been stopped...")
 
-def create_app(with_lifespan: bool = True) -> FastAPI:
+def create_app(engine = None, with_lifespan: bool = True) -> FastAPI:
+
+    if engine is None:
+        engine = default_engine
+
+    # Create database tables
+    Base.metadata.create_all(bind=engine)
 
     lifespan = life_span if with_lifespan else None
 
