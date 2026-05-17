@@ -4,14 +4,18 @@ from tests.api.conftest import URL
 
 
 
-def test_full_user_lifecycle_flow(client, authenticated_user):
-    access_headers = authenticated_user["access_headers"]
-    payload = authenticated_user["user"]
+def test_full_user_lifecycle_flow(
+        client,
+        first_user_payload,
+        auth_headers_factory,
+):
+    user1_headers = auth_headers_factory(first_user_payload)
+
 
     # Get current user
     me_response = client.get(
         f"{URL}/me",
-        headers=access_headers
+        headers=user1_headers
     )
 
     assert me_response.status_code == 200
@@ -23,12 +27,12 @@ def test_full_user_lifecycle_flow(client, authenticated_user):
     # Update user
     update_response = client.patch(
         f"{URL}/users/{user_id}",
-        headers=access_headers,
+        headers=user1_headers,
         json={
             "username": "updated_username",
             "full_name": "Updated Full Name",
             "password": "newPassword123",
-            "current_password": payload["password"]
+            "current_password": first_user_payload["password"]
         }
     )
 
@@ -43,7 +47,7 @@ def test_full_user_lifecycle_flow(client, authenticated_user):
     relogin_response = client.post(
         f"{URL}/login",
         json={
-            "email": payload["email"],
+            "email": first_user_payload["email"],
             "password": "newPassword123"
         }
     )
@@ -69,7 +73,7 @@ def test_full_user_lifecycle_flow(client, authenticated_user):
     failed_login_response = client.post(
         f"{URL}/login",
         json={
-            "email": payload["email"],
+            "email": first_user_payload["email"],
             "password": "newPassword123"
         }
     )

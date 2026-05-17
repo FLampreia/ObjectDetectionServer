@@ -3,12 +3,12 @@ import pytest
 from tests.api.conftest import URL
 
 
-def test_login_success(client, user_payload):
-    client.post(f"{URL}/signin", json=user_payload)
+def test_login_success(client, first_user_payload):
+    client.post(f"{URL}/signin", json=first_user_payload)
 
     response = client.post(f"{URL}/login", json={
-        "email": user_payload["email"],
-        "password": user_payload["password"]
+        "email": first_user_payload["email"],
+        "password": first_user_payload["password"]
     })
 
     assert response.status_code == 200
@@ -36,15 +36,15 @@ def test_login_success(client, user_payload):
 )
 def test_login_invalid_credentials(
         client,
-        user_payload,
+        first_user_payload,
         overrides,
         expected_status_code
 ):
-    client.post(f"{URL}/signin", json=user_payload)
+    client.post(f"{URL}/signin", json=first_user_payload)
 
     login_payload = {
-        "email": user_payload["email"],
-        "password": user_payload["password"],
+        "email": first_user_payload["email"],
+        "password": first_user_payload["password"],
         **overrides
     }
 

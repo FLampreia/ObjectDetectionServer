@@ -1,8 +1,9 @@
 from tests.api.conftest import URL
 
 
-def test_refresh_success(client, login_data):
-    refresh_token = login_data["refresh_token"]
+def test_refresh_success(client, login_user, first_user_payload):
+    user1 = login_user(first_user_payload)
+    refresh_token = user1["refresh_token"]
 
     headers = {
         "Authorization": f"Bearer {refresh_token}"
@@ -18,17 +19,20 @@ def test_refresh_success(client, login_data):
     assert data["message"] == "Refresh Successful"
 
 
-def test_refresh_with_access_token(client, auth_token):
+def test_refresh_with_access_token(client, first_user_payload, auth_headers_factory):
+    user_headers = auth_headers_factory(first_user_payload)
+
     response = client.post(
         f"{URL}/refresh",
-        headers={"Authorization": f"Bearer {auth_token}"}
+        headers={"Authorization": f"Bearer {user_headers}"}
     )
 
     assert response.status_code == 401
 
 
-def test_refresh_token_reuse(client, login_data):
-    refresh_token = login_data["refresh_token"]
+def test_refresh_token_reuse(client, login_user, first_user_payload):
+    user1 = login_user(first_user_payload)
+    refresh_token = user1["refresh_token"]
 
     headers = {
         "Authorization": f"Bearer {refresh_token}"

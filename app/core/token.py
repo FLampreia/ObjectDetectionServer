@@ -16,7 +16,7 @@ from app.db.schema import User
 from app.services.user_service import UserService
 from app.core.security import decode_token
 
-
+# todo rever questão do jti e do redis e pensar em criar o token service
 class TokenBearer(HTTPBearer):
 
     def __init__(self, auto_error: bool = True):

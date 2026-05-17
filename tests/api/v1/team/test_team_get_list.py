@@ -1,14 +1,29 @@
+import pytest
+
 from tests.api.conftest import URL
 
-
-def test_get_team_list_success(
-    client,
-    auth_headers,
-    created_team
-):
-    response = client.get(
+@pytest.mark.parametrize(
+    "endpoint",
+    [
         f"{URL}/team",
-        headers=auth_headers
+        f"{URL}/team/logged",
+    ])
+def test_get_team_list_success(
+        client,
+        first_user_payload,
+        auth_headers_factory,
+        created_team_factory,
+        team_payload_factory,
+        endpoint
+):
+    user1_headers = auth_headers_factory(first_user_payload)
+
+    team1_payload = team_payload_factory()
+    team1 = created_team_factory(user1_headers, team1_payload)
+
+    response = client.get(
+        endpoint,
+        headers=user1_headers
     )
 
     assert response.status_code == 200
@@ -19,23 +34,42 @@ def test_get_team_list_success(
     assert len(data) >= 1
 
     assert any(
-        team["id"] == created_team["id"]
+        team["id"] == team1["id"]
         for team in data
     )
 
 
-def test_get_team_list_requires_auth(client):
-    response = client.get(
-        f"{URL}/team"
-    )
-
+@pytest.mark.parametrize(
+    "endpoint",
+    [
+        f"{URL}/team",
+        f"{URL}/team/logged",
+    ])
+def test_team_endpoints_require_auth(
+        client,
+        endpoint
+):
+    response = client.get(endpoint)
     assert response.status_code == 401
 
 
-def test_get_team_list_empty(client, auth_headers):
-    response = client.get(
+@pytest.mark.parametrize(
+    "endpoint",
+    [
         f"{URL}/team",
-        headers=auth_headers
+        f"{URL}/team/logged",
+    ])
+def test_get_team_list_empty(
+        client,
+        first_user_payload,
+        auth_headers_factory,
+        endpoint
+):
+    user1_headers = auth_headers_factory(first_user_payload)
+
+    response = client.get(
+        endpoint,
+        headers=user1_headers
     )
 
     assert response.status_code == 200

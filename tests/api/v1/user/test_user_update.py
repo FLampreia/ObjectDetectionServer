@@ -3,10 +3,18 @@ import pytest
 from tests.api.conftest import URL
 
 
-def test_update_user_partial_success(client, auth_headers, current_user):
+def test_update_user_partial_success(
+        client,
+        first_user_payload,
+        auth_headers_factory,
+        current_user
+):
+    user1_headers = auth_headers_factory(first_user_payload)
+    user1 = current_user(user1_headers)
+
     response = client.patch(
-        f"{URL}/users/{current_user['id']}",
-        headers=auth_headers,
+        f"{URL}/users/{user1['id']}",
+        headers=user1_headers,
         json={
             "username": "new_username",
             "full_name": "New Full Name",
@@ -26,7 +34,6 @@ def test_update_user_partial_success(client, auth_headers, current_user):
 @pytest.mark.parametrize(
     "payload",
     [
-
         {
             "username": "new_username",
             "full_name": "New Full Name",
@@ -39,9 +46,12 @@ def test_update_user_partial_success(client, auth_headers, current_user):
             "password": None,
             "current_password": None
         },
-        {"email": "email@email.com"},
-        {"password": "newPassword123"}
-
+        {
+            "email": "email@email.com"
+        },
+        {
+            "password": "newPassword123"
+        }
     ],
     ids=[
         "invalid_current_password",
@@ -52,13 +62,17 @@ def test_update_user_partial_success(client, auth_headers, current_user):
 )
 def test_update_user_partial_invalid_cases(
         client,
-        auth_headers,
+        first_user_payload,
+        auth_headers_factory,
         current_user,
         payload
 ):
+    user1_headers = auth_headers_factory(first_user_payload)
+    user1 = current_user(user1_headers)
+
     response = client.patch(
-        f"{URL}/users/{current_user['id']}",
-        headers=auth_headers,
+        f"{URL}/users/{user1['id']}",
+        headers=user1_headers,
         json=payload
     )
 
@@ -87,23 +101,36 @@ def test_update_user_partial_invalid_cases(
 )
 def test_update_user_partial_single_field_success(
         client,
-        auth_headers,
+        first_user_payload,
+        auth_headers_factory,
         current_user,
         payload
 ):
+    user1_headers = auth_headers_factory(first_user_payload)
+    user1 = current_user(user1_headers)
+
     response = client.patch(
-        f"{URL}/users/{current_user['id']}",
-        headers=auth_headers,
+        f"{URL}/users/{user1['id']}",
+        headers=user1_headers,
         json=payload
     )
 
     assert response.status_code == 200
 
 
-def test_update_other_user_partial(client, auth_headers, create_second_user):
+def test_update_other_user_partial(
+        client,
+        first_user_payload,
+        auth_headers_factory,
+        create_user_factory,
+        second_user_payload,
+):
+    user1_headers = auth_headers_factory(first_user_payload)
+    user2 = create_user_factory(second_user_payload)
+
     response = client.patch(
-        f"{URL}/users/{create_second_user["id"]}",
-        headers=auth_headers,
+        f"{URL}/users/{user2["id"]}",
+        headers=user1_headers,
         json={
             "username": "new_username",
             "full_name": "New Full Name",
@@ -115,9 +142,17 @@ def test_update_other_user_partial(client, auth_headers, create_second_user):
     assert response.status_code == 403
 
 
-def test_update_user_partial_requires_auth(client, current_user):
+def test_update_user_partial_requires_auth(
+        client,
+        first_user_payload,
+        auth_headers_factory,
+        current_user,
+):
+    user1_headers = auth_headers_factory(first_user_payload)
+    user1 = current_user(user1_headers)
+
     response = client.patch(
-        f"{URL}/users/{current_user['id']}",
+        f"{URL}/users/{user1['id']}",
         json={
             "username": "new_username"
         }
@@ -128,15 +163,21 @@ def test_update_user_partial_requires_auth(client, current_user):
 
 def test_update_user_partial_username_already_exists(
         client,
-        auth_headers,
-        current_user,
-        create_second_user
+        first_user_payload,
+        auth_headers_factory,
+        create_user_factory,
+        second_user_payload,
+        current_user
 ):
+    user1_headers = auth_headers_factory(first_user_payload)
+    user1 = current_user(user1_headers)
+    user2 = create_user_factory(second_user_payload)
+
     response = client.patch(
-        f"{URL}/users/{current_user['id']}",
-        headers=auth_headers,
+        f"{URL}/users/{user1['id']}",
+        headers=user1_headers,
         json={
-            "username": create_second_user["username"]
+            "username": user2["username"]
         }
     )
 

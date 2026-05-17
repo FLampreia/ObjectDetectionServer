@@ -19,9 +19,6 @@ from app.exceptions.register import register_all_exceptions
 setup_logging()
 logger = logging.getLogger(__name__)
 
-
-
-
 @asynccontextmanager
 async def life_span(app: FastAPI):
     logger.debug("Server is starting...")
@@ -83,4 +80,3 @@ def create_app(engine = None, with_lifespan: bool = True) -> FastAPI:
     return fastapi_app
 
 
-app = create_app()
