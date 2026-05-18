@@ -81,7 +81,6 @@ class TeamService:
             self,
             team_id: UUID,
             email: EmailStr,
-            role: TeamRole,
             requester_id: UUID
     ):
 

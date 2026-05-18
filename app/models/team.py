@@ -16,7 +16,6 @@ class TeamCreateAndUpdate(BaseModel):
 
 class AddTeamMember(BaseModel):
     email: EmailStr
-    role: TeamRole = TeamRole.Member
 
 class RemoveTeamMember(BaseModel):
     email: EmailStr

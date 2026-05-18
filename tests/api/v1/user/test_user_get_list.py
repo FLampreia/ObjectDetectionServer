@@ -5,10 +5,10 @@ def test_get_users_success(
         client,
         first_user_payload,
         auth_headers_factory,
-        current_user
+        current_user_factory
 ):
     user1_headers = auth_headers_factory(first_user_payload)
-    user1 = current_user(user1_headers)
+    user1 = current_user_factory(user1_headers)
 
     response = client.get(f"{URL}/users", headers=user1_headers)
     assert response.status_code == 200

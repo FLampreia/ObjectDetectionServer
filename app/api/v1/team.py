@@ -59,7 +59,6 @@ def add_team_member(
     return service.add_member_to_team(
         team_id=team_id,
         email=data.email,
-        role=data.role,
         requester_id=current_user.id,
     )
 

@@ -5,10 +5,10 @@ def test_delete_user_success(
         client,
         first_user_payload,
         auth_headers_factory,
-        current_user
+        current_user_factory
 ):
     user1_headers = auth_headers_factory(first_user_payload)
-    user1 = current_user(user1_headers)
+    user1 = current_user_factory(user1_headers)
 
     response = client.delete(
         f"{URL}/users/{user1['id']}",
@@ -44,10 +44,10 @@ def test_delete_user_requires_auth(
         client,
         first_user_payload,
         auth_headers_factory,
-        current_user
+        current_user_factory
 ):
     user1_headers = auth_headers_factory(first_user_payload)
-    user1 = current_user(user1_headers)
+    user1 = current_user_factory(user1_headers)
 
     response = client.delete(
         f"{URL}/users/{user1['id']}",

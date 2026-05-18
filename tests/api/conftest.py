@@ -200,7 +200,7 @@ def login_user(client, create_user_factory):
 
 
 @pytest.fixture
-def current_user(client):
+def current_user_factory(client):
     """
     Factory fixture to retrieve the currently authenticated user.
 

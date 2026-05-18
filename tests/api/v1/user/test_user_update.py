@@ -7,10 +7,10 @@ def test_update_user_partial_success(
         client,
         first_user_payload,
         auth_headers_factory,
-        current_user
+        current_user_factory
 ):
     user1_headers = auth_headers_factory(first_user_payload)
-    user1 = current_user(user1_headers)
+    user1 = current_user_factory(user1_headers)
 
     response = client.patch(
         f"{URL}/users/{user1['id']}",
@@ -64,11 +64,11 @@ def test_update_user_partial_invalid_cases(
         client,
         first_user_payload,
         auth_headers_factory,
-        current_user,
+        current_user_factory,
         payload
 ):
     user1_headers = auth_headers_factory(first_user_payload)
-    user1 = current_user(user1_headers)
+    user1 = current_user_factory(user1_headers)
 
     response = client.patch(
         f"{URL}/users/{user1['id']}",
@@ -103,11 +103,11 @@ def test_update_user_partial_single_field_success(
         client,
         first_user_payload,
         auth_headers_factory,
-        current_user,
+        current_user_factory,
         payload
 ):
     user1_headers = auth_headers_factory(first_user_payload)
-    user1 = current_user(user1_headers)
+    user1 = current_user_factory(user1_headers)
 
     response = client.patch(
         f"{URL}/users/{user1['id']}",
@@ -146,10 +146,10 @@ def test_update_user_partial_requires_auth(
         client,
         first_user_payload,
         auth_headers_factory,
-        current_user,
+        current_user_factory,
 ):
     user1_headers = auth_headers_factory(first_user_payload)
-    user1 = current_user(user1_headers)
+    user1 = current_user_factory(user1_headers)
 
     response = client.patch(
         f"{URL}/users/{user1['id']}",
@@ -167,10 +167,10 @@ def test_update_user_partial_username_already_exists(
         auth_headers_factory,
         create_user_factory,
         second_user_payload,
-        current_user
+        current_user_factory
 ):
     user1_headers = auth_headers_factory(first_user_payload)
-    user1 = current_user(user1_headers)
+    user1 = current_user_factory(user1_headers)
     user2 = create_user_factory(second_user_payload)
 
     response = client.patch(
