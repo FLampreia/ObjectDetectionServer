@@ -107,7 +107,7 @@ def client(db_session):
 # -------------------------------------------------
 # USER
 # -------------------------------------------------
-#todo pensar em fazer factory como fiz em team e utilizar apenas um payload
+# todo pensar em fazer factory como fiz em team e utilizar apenas um payload
 @pytest.fixture
 def first_user_payload():
     """
@@ -256,6 +256,7 @@ def team_payload_factory():
     Returns:
         Callable[[], dict]: Function that returns a new team payload dictionary.
     """
+
     def _create():
         unique = str(uuid.uuid4())[:8]
         return {
@@ -266,7 +267,7 @@ def team_payload_factory():
 
 
 @pytest.fixture
-def created_team_factory(client, auth_headers_factory):
+def created_team_factory(client):
     """
     Factory fixture to create a team via the API.
 
@@ -276,6 +277,7 @@ def created_team_factory(client, auth_headers_factory):
     Returns:
         Callable[[dict], dict]: Function that creates a team and returns the response data.
     """
+
     def _create(auth_header, team_payload):
         response = client.post(
             f"{URL}/team",
@@ -287,6 +289,22 @@ def created_team_factory(client, auth_headers_factory):
         return response.json()
 
     return _create
+
+
+@pytest.fixture
+def team_add_member_factory(client):
+    def _add_member(owner_headers, team_id, email):
+        response = client.post(
+            f"{URL}/team/{team_id}/add",
+            json={
+                "email": email,
+            },
+            headers=owner_headers,
+        )
+        assert response.status_code == 200
+        return response.json()
+
+    return _add_member
 
 
 # -------------------------------------------------

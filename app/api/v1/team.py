@@ -87,7 +87,7 @@ def get_team_members(
 ):
     logger.info("Getting members from team %s", team_id)
 
-    return service.get_team_members(team_id)
+    return service.get_team_members(team_id, current_user.id)
 
 
 @team_router.delete("/team/{team_id}", status_code=status.HTTP_200_OK)

@@ -140,7 +140,9 @@ class TeamService:
 
         return True
 
-    def get_team_members(self, team_id: UUID) -> list[type[TeamMember]]:
+    def get_team_members(self, team_id: UUID, requester_id: UUID) -> list[type[TeamMember]]:
+
+        self._validate_owner(team_id, requester_id)
 
         return self._db.query(TeamMember).filter(TeamMember.team_id == team_id).all()
 
