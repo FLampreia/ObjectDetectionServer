@@ -6,7 +6,7 @@ from starlette import status
 
 from app.core.deps import get_team_service
 from app.core.token import get_current_user
-from app.models.team import TeamRead, TeamCreateAndUpdate, AddTeamMember, RemoveTeamMember, TeamMember
+from app.models.team import TeamRead, TeamCreateAndUpdate, AddTeamMember, RemoveTeamMember, TeamMember, TeamReadWithRole
 from app.models.user import UserRead
 from app.services.team_service import TeamService
 
@@ -38,7 +38,7 @@ def get_all_team_list(
     return service.list_teams()
 
 
-@team_router.get("/team/logged", response_model=list[TeamRead], status_code=status.HTTP_200_OK)
+@team_router.get("/team/logged", response_model=list[TeamReadWithRole], status_code=status.HTTP_200_OK)
 def get_logged_user_team_list(
         service: TeamService = Depends(get_team_service),
         current_user=Depends(get_current_user)

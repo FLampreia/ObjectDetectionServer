@@ -1,10 +1,12 @@
 from pydantic import EmailStr
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 from uuid import UUID
 
 from app.db.schema import TeamRole, Team, TeamMember, User
 from app.exceptions.custom_exceptions import UserNotFound, UserAlreadyInTeam, NotTeamOwner, NotAllowedToRemoveOwner, \
     EmailAlreadyExists, UsernameAlreadyExists, DatabaseIntegrityException, TeamNameAlreadyExists, TeamNotFound
+from app.models.team import TeamRead, TeamReadWithRole
 from app.services.user_service import UserService
 
 
@@ -21,18 +23,28 @@ class TeamService:
     def list_teams(self) -> list[type[Team]]:
         return self._db.query(Team).all()
 
-    def list_user_teams(self, user_id: UUID) -> list[type[Team]]:
-        return (
-            self._db.query(Team)
+    def list_user_teams(self, user_id: UUID) -> list[TeamReadWithRole]:
+        stmt = (
+            select(Team, TeamMember)
             .join(TeamMember, TeamMember.team_id == Team.id)
-            .filter(TeamMember.user_id == user_id)
-            .all()
+            .where(TeamMember.user_id == user_id)
         )
 
+        results = self._db.execute(stmt).all()
+
+        return [
+            TeamReadWithRole(
+                id=team.id,
+                name=team.name,
+                created_at=team.created_at,
+                role=membership.role.value
+            )
+            for team, membership in results
+        ]
     def get_team(self, team_id: UUID) -> Team | None:
         return self._db.query(Team).filter(Team.id == team_id).first()
 
-    def create_team(self, name: str, owner_id: UUID) -> Team:
+    def create_team(self, name: str, owner_id: UUID) -> TeamRead:
         team = Team(
             name=name
         )
@@ -52,7 +64,12 @@ class TeamService:
             self._db.commit()
             self._db.refresh(team)
 
-            return team
+            return TeamRead(
+                id=team.id,
+                name=team.name,
+                created_at=team.created_at,
+                role=owner_membership.role
+            )
 
         # In case data already exists
         except Exception as e:

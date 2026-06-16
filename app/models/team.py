@@ -24,3 +24,9 @@ class TeamMember(BaseModel):
     team_id: uuid.UUID
     user_id: uuid.UUID
     role: TeamRole
+
+class TeamReadWithRole(BaseModel):
+    id: uuid.UUID
+    name: str
+    created_at: datetime
+    role: TeamRole
