@@ -37,7 +37,8 @@ class TeamService:
                 id=team.id,
                 name=team.name,
                 created_at=team.created_at,
-                role=membership.role.value
+                role=membership.role.value,
+                isFavorite=membership.isFavorite,
             )
             for team, membership in results
         ]
@@ -67,8 +68,7 @@ class TeamService:
             return TeamRead(
                 id=team.id,
                 name=team.name,
-                created_at=team.created_at,
-                role=owner_membership.role
+                created_at=team.created_at
             )
 
         # In case data already exists
@@ -177,3 +177,25 @@ class TeamService:
             .filter_by(team_id=team_id, user_id=user_id)
             .first()
         )
+    def toggle_favorite(self, team_id: UUID, requester_id: UUID) -> bool:
+
+        member = (
+            self._db.query(TeamMember)
+            .filter(
+                TeamMember.team_id == team_id,
+                TeamMember.user_id == requester_id,
+            )
+            .first()
+        )
+
+        if not member:
+            raise TeamNotFound()
+
+        # toggle
+        member.is_favorite = not member.is_favorite
+
+        self._db.add(member)
+        self._db.commit()
+        self._db.refresh(member)
+
+        return member.is_favorite

@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import List
 
 from pydantic import EmailStr
-from sqlalchemy import String, create_engine, DateTime, Column, Enum, ForeignKey
+from sqlalchemy import String, create_engine, DateTime, Column, Enum, ForeignKey, Boolean
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker, relationship
 
 
@@ -73,6 +73,11 @@ class TeamMember(Base):
     role: Mapped[TeamRole] = mapped_column(
         Enum(TeamRole),
         default=TeamRole.Member
+    )
+
+    isFavorite: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False
     )
 
     joined_at: Mapped[datetime] = mapped_column(

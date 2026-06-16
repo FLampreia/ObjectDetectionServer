@@ -99,3 +99,13 @@ def delete_team(
     logger.info("Deleting team %s", team_id)
 
     return service.delete_team(team_id, current_user.id)
+
+@team_router.patch("/team/{team_id}/fav", status_code=status.HTTP_200_OK)
+def toggle_fav(
+        team_id: uuid.UUID,
+        service: TeamService = Depends(get_team_service),
+        current_user=Depends(get_current_user)
+):
+    logger.info("Toggling favorite for team %s", team_id)
+
+    return service.toggle_favorite(team_id, current_user.id)

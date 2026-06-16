@@ -30,3 +30,4 @@ class TeamReadWithRole(BaseModel):
     name: str
     created_at: datetime
     role: TeamRole
+    isFavorite: bool
