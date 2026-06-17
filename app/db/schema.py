@@ -75,7 +75,7 @@ class TeamMember(Base):
         default=TeamRole.Member
     )
 
-    isFavorite: Mapped[bool] = mapped_column(
+    is_favorite: Mapped[bool] = mapped_column(
         Boolean,
         default=False
     )

@@ -109,3 +109,14 @@ def toggle_fav(
     logger.info("Toggling favorite for team %s", team_id)
 
     return service.toggle_favorite(team_id, current_user.id)
+
+@team_router.patch("/team/{team_id}", status_code=status.HTTP_200_OK)
+def update_team_name(
+        team_id: uuid.UUID,
+        name: TeamCreateAndUpdate,
+        service: TeamService = Depends(get_team_service),
+        current_user=Depends(get_current_user)
+):
+    logger.info("Updating team name")
+
+    service.update_name(team_id=team_id, name=name.name, user_id=current_user.id)

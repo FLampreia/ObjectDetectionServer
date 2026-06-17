@@ -1,6 +1,8 @@
+from sqlite3 import IntegrityError
+
 from pydantic import EmailStr
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, Mapped
 from uuid import UUID
 
 from app.db.schema import TeamRole, Team, TeamMember, User
@@ -38,10 +40,11 @@ class TeamService:
                 name=team.name,
                 created_at=team.created_at,
                 role=membership.role.value,
-                isFavorite=membership.isFavorite,
+                is_favorite=membership.is_favorite,
             )
             for team, membership in results
         ]
+
     def get_team(self, team_id: UUID) -> Team | None:
         return self._db.query(Team).filter(Team.id == team_id).first()
 
@@ -87,7 +90,7 @@ class TeamService:
         if not team:
             raise TeamNotFound()
 
-        self._validate_owner(team_id, requester_id)
+        self._validate_if_is_member(team_id, requester_id)
 
         self._db.delete(team)
         self._db.commit()
@@ -101,7 +104,7 @@ class TeamService:
             requester_id: UUID
     ):
 
-        self._validate_owner(team_id, requester_id)
+        self._validate_if_is_member(team_id, requester_id)
 
         user = self._user_service.get_user_by_email(email)
 
@@ -126,7 +129,7 @@ class TeamService:
 
     def remove_member_from_team(self, team_id: UUID, email: EmailStr, requester_id: UUID):
 
-        self._validate_owner(team_id, requester_id)
+        self._validate_if_is_member(team_id, requester_id)
 
         user = self._user_service.get_user_by_email(email)
 
@@ -159,16 +162,22 @@ class TeamService:
 
     def get_team_members(self, team_id: UUID, requester_id: UUID) -> list[type[TeamMember]]:
 
-        self._validate_owner(team_id, requester_id)
+        self._validate_if_is_member(team_id, requester_id)
 
         return self._db.query(TeamMember).filter(TeamMember.team_id == team_id).all()
 
-    def _validate_owner(self, team_id: UUID, requester_id: UUID):
 
-        team_member = self._get_member(team_id, requester_id)
 
-        if not team_member or team_member.role != TeamRole.Owner:
-            raise NotTeamOwner()
+    def _validate_if_is_member(self, team_id: UUID, requester_id: UUID):
+
+        return self._get_member(team_id, requester_id)
+
+    # def _validate_owner(self, team_id: UUID, requester_id: UUID):
+    #
+    #     team_member = self._validate_if_is_member(team_id, requester_id)
+    #
+    #     if not team_member or team_member.role != TeamRole.Owner:
+    #         raise NotTeamOwner()
 
     def _get_member(self, team_id: UUID, user_id: UUID) -> TeamMember | None:
 
@@ -177,7 +186,8 @@ class TeamService:
             .filter_by(team_id=team_id, user_id=user_id)
             .first()
         )
-    def toggle_favorite(self, team_id: UUID, requester_id: UUID) -> bool:
+
+    def toggle_favorite(self, team_id: UUID, requester_id: UUID) -> Mapped[bool]:
 
         member = (
             self._db.query(TeamMember)
@@ -187,15 +197,48 @@ class TeamService:
             )
             .first()
         )
-
         if not member:
             raise TeamNotFound()
 
         # toggle
         member.is_favorite = not member.is_favorite
 
-        self._db.add(member)
         self._db.commit()
         self._db.refresh(member)
 
         return member.is_favorite
+
+    def update_name(self, team_id: UUID, name: str, user_id: UUID) -> None:
+        # 1. garantir que o utilizador pertence à equipa
+        membership = (
+            self._db.query(TeamMember)
+            .filter(
+                TeamMember.team_id == team_id,
+                TeamMember.user_id == user_id
+            )
+            .first()
+        )
+
+
+        if not membership:
+            raise ValueError("User is not a member of this team")
+
+        # 2. buscar a equipa
+        team = (
+            self._db.query(Team)
+            .filter(Team.id == team_id)
+            .first()
+        )
+
+        if not team:
+            raise ValueError("Team not found")
+
+        # 3. atualizar nome
+        team.name = name
+
+        try:
+            self._db.commit()
+        except IntegrityError:
+            self._db.rollback()
+            self.error = ValueError("Team name already exists")
+            raise self.error
