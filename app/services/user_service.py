@@ -108,6 +108,12 @@ class UserService:
 
         return user
 
+    def get_user_by_id(self, user_id: UUID) -> User | None:
+
+        user = self._db.query(User).filter(User.id == user_id).first()
+
+        return user
+
     def verify_login(self, email: EmailStr, password: str) -> bool:
         user = self.get_user_by_email(email)
 

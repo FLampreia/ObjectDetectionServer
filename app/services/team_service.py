@@ -2,13 +2,13 @@ from sqlite3 import IntegrityError
 
 from pydantic import EmailStr
 from sqlalchemy import select
-from sqlalchemy.orm import Session, Mapped
+from sqlalchemy.orm import Session, Mapped, joinedload
 from uuid import UUID
 
 from app.db.schema import TeamRole, Team, TeamMember, User
 from app.exceptions.custom_exceptions import UserNotFound, UserAlreadyInTeam, NotTeamOwner, NotAllowedToRemoveOwner, \
     EmailAlreadyExists, UsernameAlreadyExists, DatabaseIntegrityException, TeamNameAlreadyExists, TeamNotFound
-from app.models.team import TeamRead, TeamReadWithRole
+from app.models.team import TeamRead, TeamReadWithRole, TeamMemberRead
 from app.services.user_service import UserService
 
 
@@ -127,11 +127,11 @@ class TeamService:
 
         return membership
 
-    def remove_member_from_team(self, team_id: UUID, email: EmailStr, requester_id: UUID):
+    def remove_member_from_team(self, team_id: UUID, user_id: UUID, requester_id: UUID):
 
         self._validate_if_is_member(team_id, requester_id)
 
-        user = self._user_service.get_user_by_email(email)
+        user = self._user_service.get_user_by_id(user_id)
 
         if not user:
             raise UserNotFound()
@@ -160,11 +160,26 @@ class TeamService:
 
         return True
 
-    def get_team_members(self, team_id: UUID, requester_id: UUID) -> list[type[TeamMember]]:
+    def get_team_members(self, team_id: UUID, requester_id: UUID) -> list[TeamMemberRead]:
 
         self._validate_if_is_member(team_id, requester_id)
 
-        return self._db.query(TeamMember).filter(TeamMember.team_id == team_id).all()
+        members = (
+            self._db.query(TeamMember)
+            .options(joinedload(TeamMember.user))
+            .filter(TeamMember.team_id == team_id)
+            .all()
+        )
+
+        return [
+            TeamMemberRead(
+                user_id=member.user.id,
+                username=member.user.username,
+                email=member.user.email,
+                role=member.role
+            )
+            for member in members
+        ]
 
 
 
