@@ -2,13 +2,13 @@ from sqlite3 import IntegrityError
 
 from pydantic import EmailStr
 from sqlalchemy import select
-from sqlalchemy.orm import Session, Mapped, joinedload
+from sqlalchemy.orm import Session, Mapped, joinedload, selectinload
 from uuid import UUID
 
 from app.db.schema import TeamRole, Team, TeamMember, User
 from app.exceptions.custom_exceptions import UserNotFound, UserAlreadyInTeam, NotTeamOwner, NotAllowedToRemoveOwner, \
     EmailAlreadyExists, UsernameAlreadyExists, DatabaseIntegrityException, TeamNameAlreadyExists, TeamNotFound
-from app.models.team import TeamRead, TeamReadWithRole, TeamMemberRead
+from app.models.team import TeamRead, TeamReadWithFavorite, TeamMemberRead
 from app.services.user_service import UserService
 
 
@@ -22,27 +22,80 @@ class TeamService:
         self._db = session
         self._user_service = user_service
 
-    def list_teams(self) -> list[type[Team]]:
-        return self._db.query(Team).all()
+    def list_teams(self) -> list[TeamRead]:
+        teams = (
+            self._db.query(Team)
+            .options(selectinload(Team.members).selectinload(TeamMember.user))
+            .all()
+        )
 
-    def list_user_teams(self, user_id: UUID) -> list[TeamReadWithRole]:
+        result = []
+
+        for team in teams:
+            owner_membership = next(
+                (m for m in team.members if m.role == TeamRole.Owner),
+                None
+            )
+
+            if owner_membership is None:
+                continue  # ou lança erro se owner for obrigatório
+
+            result.append(
+                TeamRead(
+                    id=team.id,
+                    name=team.name,
+                    created_at=team.created_at,
+                    owner=TeamMemberRead(
+                        user_id=owner_membership.user.id,
+                        username=owner_membership.user.username,
+                        email=owner_membership.user.email,
+                        role=owner_membership.role,
+                    )
+                )
+            )
+
+        return result
+
+    def list_user_teams(self, user_id: UUID) -> list[TeamReadWithFavorite]:
         stmt = (
-            select(Team, TeamMember)
+            select(Team, TeamMember, User)
             .join(TeamMember, TeamMember.team_id == Team.id)
+            .join(User, User.id == TeamMember.user_id)
             .where(TeamMember.user_id == user_id)
         )
 
         results = self._db.execute(stmt).all()
 
+        team_ids = [team.id for team, _, _ in results]
+
+        owners_stmt = (
+            select(TeamMember, User)
+            .join(User, User.id == TeamMember.user_id)
+            .where(
+                TeamMember.team_id.in_(team_ids),
+                TeamMember.role == TeamRole.Owner
+            )
+        )
+
+        owners = {
+            tm.team_id: TeamMemberRead(
+                user_id=u.id,
+                username=u.username,
+                email=u.email,
+                role=tm.role
+            )
+            for tm, u in self._db.execute(owners_stmt).all()
+        }
+
         return [
-            TeamReadWithRole(
+            TeamReadWithFavorite(
                 id=team.id,
                 name=team.name,
                 created_at=team.created_at,
-                role=membership.role.value,
                 is_favorite=membership.is_favorite,
+                owner=owners.get(team.id)
             )
-            for team, membership in results
+            for team, membership, _ in results
         ]
 
     def get_team(self, team_id: UUID) -> Team | None:

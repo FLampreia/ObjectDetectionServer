@@ -53,6 +53,7 @@ class Team(Base):
         cascade="all, delete-orphan"
     )
 
+
 class TeamRole(enum.Enum):
     Owner = "owner"
     Member = "member"
