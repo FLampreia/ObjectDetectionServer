@@ -18,6 +18,9 @@ class Config(BaseSettings):
     REDIS_PORT: int = 6379
     JTI_EXPIRY: int = 3600
 
+    PROCESSOR_HOST: str = "localhost"
+    PROCESSOR_PORT: int = 8001
+
     model_config = SettingsConfigDict(
         env_file=".env",
         extra="ignore"
