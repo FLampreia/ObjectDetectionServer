@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import List
 
 from pydantic import EmailStr
-from sqlalchemy import String, create_engine, DateTime, Column, Enum, ForeignKey, Boolean
+from sqlalchemy import String, create_engine, DateTime, Column, Enum, ForeignKey, Boolean, Float, Integer
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker, relationship
 
 
@@ -94,4 +94,63 @@ class TeamMember(Base):
     team: Mapped["Team"] = relationship(
         "Team",
         back_populates="members"
+    )
+
+class Detection(Base):
+    __tablename__ = "detection"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        primary_key=True,
+        default=uuid.uuid4,
+        unique=True,
+        index=True
+    )
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id"),
+        index=True,
+        nullable=False
+    )
+
+    team_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("teams.id"),
+        index=True,
+    )
+
+    algorithm: Mapped["str"] = mapped_column(String, index=True)
+    conf_threshold: Mapped["float"] = mapped_column(Float)
+    processing_time_ms: Mapped["int"] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+
+    user: Mapped["User"] = relationship("User")
+    team: Mapped["Team"] = relationship("Team")
+
+    objects: Mapped[list["DetectedObject"]] = relationship(
+        "DetectedObject",
+        back_populates="detection",
+        cascade="all, delete-orphan"
+    )
+
+class DetectedObject(Base):
+    __tablename__ = "detected_object"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        primary_key=True,
+        default=uuid.uuid4,
+        index=True
+    )
+
+    detection_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("detection.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False
+    )
+
+    object_name: Mapped[str] = mapped_column(String, index=True)
+    object_class_id: Mapped[int] = mapped_column(Integer, index=True)
+    confidence: Mapped[float] = mapped_column(Float)
+
+    detection: Mapped["Detection"] = relationship(
+        "Detection",
+        back_populates="objects"
     )

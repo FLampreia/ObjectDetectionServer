@@ -124,7 +124,13 @@ class TeamService:
             return TeamRead(
                 id=team.id,
                 name=team.name,
-                created_at=team.created_at
+                created_at=team.created_at,
+                owner=TeamMemberRead(
+                    user_id=owner_membership.user.id,
+                    username=owner_membership.user.username,
+                    email=owner_membership.user.email,
+                    role=owner_membership.role,
+                )
             )
 
         # In case data already exists
@@ -184,7 +190,7 @@ class TeamService:
 
         self._validate_if_is_member(team_id, requester_id)
 
-        user = self._user_service.get_user_by_id(user_id)
+        user = self._user_service.get_user(user_id)
 
         if not user:
             raise UserNotFound()
@@ -239,13 +245,6 @@ class TeamService:
     def _validate_if_is_member(self, team_id: UUID, requester_id: UUID):
 
         return self._get_member(team_id, requester_id)
-
-    # def _validate_owner(self, team_id: UUID, requester_id: UUID):
-    #
-    #     team_member = self._validate_if_is_member(team_id, requester_id)
-    #
-    #     if not team_member or team_member.role != TeamRole.Owner:
-    #         raise NotTeamOwner()
 
     def _get_member(self, team_id: UUID, user_id: UUID) -> TeamMember | None:
 

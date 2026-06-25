@@ -1,8 +1,9 @@
 import logging
 from typing import Optional
+from uuid import UUID
 
-from fastapi import APIRouter, UploadFile, File
-from fastapi.params import Depends, Query, Form
+from fastapi import APIRouter, UploadFile, File, Depends
+from fastapi.params import Query, Form
 
 from app.core.deps import get_detect_service
 from app.core.token import get_current_user
@@ -13,15 +14,31 @@ logger = logging.getLogger(__name__)
 
 @detect_router.post("/detect/image")
 async def detect_image(
+        algorithm: str,
+        conf_threshold: float,
         image: UploadFile = File(...),
-        chosen_class_id: Optional[list[int]] = Form(None),
+        chosen_class_id: list[int] | None = Form(None),
+        chosen_team_id: UUID | None = Form(None),
+
         service: DetectService = Depends(get_detect_service),
         current_user=Depends(get_current_user)
 ):
     logging.info("Received image on server. Sending it to detection...")
 
-    # parsed_classes = None
-    # if chosen_class_id:
-    #     parsed_classes = json.loads(chosen_class_id)
+    return await service.process_image(
+        image=image,
+        current_user_id=current_user.id,
+        conf_threshold=conf_threshold,
+        chosen_team_id=chosen_team_id,
+        chosen_class_id=chosen_class_id,
+        algorithm=algorithm,
+    )
 
-    return await service.process_image(image, chosen_class_id)
+@detect_router.get("/detect/models")
+async def get_models_list(
+        service: DetectService = Depends(get_detect_service),
+        current_user=Depends(get_current_user)
+):
+    logging.info("Asking for models on server. Waiting for the processing worker to send them...")
+
+    return await service.get_models_list()

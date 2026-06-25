@@ -1,8 +1,12 @@
+import time
+from uuid import UUID
+
 import httpx
 from sqlalchemy.orm import Session
 from starlette.datastructures import UploadFile
-
+import json
 from app.core.config import config
+from app.db.schema import Detection
 from app.services.user_service import UserService
 
 
@@ -16,19 +20,57 @@ class DetectService:
         self._db = session
         self._user_service = user_service
 
+    def add_detection(self, user_id: UUID, team_id: UUID):
+
+        print("A guardar deteção")
+
+        # detection = Detection(
+        #     user_id=user_id,
+        #     team_id=team_id,
+        # )
+
     async def process_image(
             self,
             image: UploadFile,
+            current_user_id: UUID,
+            conf_threshold: float,
+            algorithm: str,
+            chosen_team_id: UUID | None = None,
             chosen_class_id: list[int] | None = None,
     ):
+        created_at=time.time()
         content = await image.read()
 
+        params = []
+
+        if chosen_class_id:
+            for id in chosen_class_id:
+                params.append(("chosen_class_id", id))
+
         async with httpx.AsyncClient() as client:
+
             response = await client.post(
                 f"http://{config.PROCESSOR_HOST}:{config.PROCESSOR_PORT}/detect/image",
+                params=params,
                 files={
                     "file": (image.filename, content, image.content_type)
-                }
+                },
             )
 
-            return response.json()
+        data = response.json()
+        print(data)
+        print(created_at)
+        # self.add_detection(current_user_id, chosen_team_id, agorithm)
+
+        return data
+
+    async def get_models_list(self):
+        async with httpx.AsyncClient() as client:
+
+            response = await client.get(
+                f"http://{config.PROCESSOR_HOST}:{config.PROCESSOR_PORT}/detect/models",
+            )
+
+        data = response.json()
+
+        return data
