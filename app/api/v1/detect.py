@@ -7,6 +7,7 @@ from fastapi.params import Query, Form
 
 from app.core.deps import get_detect_service
 from app.core.token import get_current_user
+from app.models.detect import DownloadModelRequest
 from app.services.detect_service import DetectService
 
 detect_router = APIRouter()
@@ -42,3 +43,15 @@ async def get_models_list(
     logging.info("Asking for models on server. Waiting for the processing worker to send them...")
 
     return await service.get_models_list()
+
+@detect_router.post("/detect/models/download")
+async def get_models_list(
+        payload: DownloadModelRequest,
+        service: DetectService = Depends(get_detect_service),
+        current_user=Depends(get_current_user)
+):
+    logging.info("Asking to download a model. Waiting for the processing worker to download it...")
+
+    result = await service.download_model(payload.name)
+
+    return {"status": "ok", "result": result}

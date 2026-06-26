@@ -74,3 +74,12 @@ class DetectService:
         data = response.json()
 
         return data
+
+    async def download_model(self, model_name: str):
+        async with httpx.AsyncClient(timeout=300.0) as client:
+            response = await client.post(
+                    f"http://{config.PROCESSOR_HOST}:{config.PROCESSOR_PORT}/detect/models/{model_name}",
+            )
+
+            response.raise_for_status()
+            return response.json()
