@@ -1,7 +1,7 @@
 import logging
 from typing import Optional
 from uuid import UUID
-
+import httpx
 from fastapi import APIRouter, UploadFile, File, Depends
 from fastapi.params import Query, Form
 
@@ -15,16 +15,22 @@ logger = logging.getLogger(__name__)
 
 @detect_router.post("/detect/image")
 async def detect_image(
-        algorithm: str,
-        conf_threshold: float,
+        algorithm: str = Form(...),
+        conf_threshold: str = Form(...),
         image: UploadFile = File(...),
-        chosen_class_id: list[int] | None = Form(None),
+        chosen_class_id: list[str] | None = Form(None),
         chosen_team_id: UUID | None = Form(None),
 
         service: DetectService = Depends(get_detect_service),
-        current_user=Depends(get_current_user)
+        current_user=Depends(get_current_user),
+
 ):
     logging.info("Received image on server. Sending it to detection...")
+
+    chosen_class_id = [
+        c for c in (chosen_class_id or [])
+        if c and c.strip()
+    ]
 
     return await service.process_image(
         image=image,
@@ -32,7 +38,7 @@ async def detect_image(
         conf_threshold=conf_threshold,
         chosen_team_id=chosen_team_id,
         chosen_class_id=chosen_class_id,
-        algorithm=algorithm,
+        algorithm=algorithm
     )
 
 @detect_router.get("/detect/models")

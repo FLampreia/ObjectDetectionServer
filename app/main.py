@@ -1,5 +1,5 @@
 import logging
-
+import httpx
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 
@@ -23,8 +23,11 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def life_span(app: FastAPI):
     logger.debug("Server is starting...")
+
     await check_redis_connection()
+
     yield
+
     logger.debug("Server as been stopped...")
 
 def create_app(engine = None, with_lifespan: bool = True) -> FastAPI:
