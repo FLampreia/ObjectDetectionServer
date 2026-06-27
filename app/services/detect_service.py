@@ -1,4 +1,5 @@
 import time
+from datetime import datetime
 from uuid import UUID
 
 import httpx
@@ -6,7 +7,8 @@ from sqlalchemy.orm import Session
 from fastapi import UploadFile
 import json
 from app.core.config import config
-from app.db.schema import Detection
+from app.db.schema import Detection, DetectedObject
+from app.models.detect import DetectionResponse
 from app.services.user_service import UserService
 
 
@@ -20,13 +22,39 @@ class DetectService:
         self._db = session
         self._user_service = user_service
 
-    def add_detection(self, user_id: UUID, team_id: UUID):
-        print("A guardar deteção")
+    def add_detection_to_db(
+            self,
+            user_id: UUID,
+            team_id: UUID,
+            model: str,
+            conf_threshold: float,
+            created_at: datetime,
+            result: DetectionResponse,
+    ):
+        detection = Detection(
+            user_id=user_id,
+            team_id=team_id,
+            model=model,
+            conf_threshold=conf_threshold,
+            processing_time_ms=result.processing_time_ms,
+            created_at=created_at,
+        )
 
-        # detection = Detection(
-        #     user_id=user_id,
-        #     team_id=team_id,
-        # )
+        self._db.add(detection)
+        self._db.flush()
+
+        for obj in result.detections:
+            detected_object = DetectedObject(
+                detection_id=detection.id,
+                object_name=obj.class_name,
+                object_class_id=obj.class_id,
+                confidence=obj.confidence,
+            )
+
+            self._db.add(detected_object)
+
+        self._db.commit()
+
 
     async def process_image(
             self,
@@ -37,7 +65,8 @@ class DetectService:
             chosen_team_id: UUID | None = None,
             chosen_class_id: list[str] | None = None,
     ):
-        # created_at = time.time()
+        created_at = datetime.now()
+
         content = await image.read()
 
         async with httpx.AsyncClient(timeout=60.0) as client:
@@ -62,35 +91,18 @@ class DetectService:
 
         response.raise_for_status()
 
+        result = DetectionResponse(**response.json())
+
+        self.add_detection_to_db(
+            user_id=current_user_id,
+            team_id=chosen_team_id,
+            model=algorithm,
+            conf_threshold=float(conf_threshold),
+            created_at=created_at,
+            result=result
+        )
+
         return response.json()
-
-        # data = [
-        #     ("algorithm", algorithm),
-        #     ("conf_threshold", conf_threshold),
-        # ]
-        #
-        # if chosen_team_id:
-        #     data.append(("chosen_team_id", str(chosen_team_id)))
-        #
-        # if chosen_class_id:
-        #     for class_id in chosen_class_id:
-        #         data.append(("chosen_class_id", str(class_id)))
-        # print(data)
-
-        # async with httpx.AsyncClient(timeout=60.0) as client:
-        #     response = await client.post(
-        #         f"http://{config.PROCESSOR_HOST}:{config.PROCESSOR_PORT}/detect/image",
-        #         data=data,
-        #         files={"file": (image.filename, content, image.content_type)},
-        #     )
-        #     response.raise_for_status()
-        #
-        # response = response.json()
-        # print(response)
-        # # print(created_at)
-        # # self.add_detection(current_user_id, chosen_team_id, agorithm)
-        #
-        # return response
 
     async def get_models_list(self):
         async with httpx.AsyncClient() as client:

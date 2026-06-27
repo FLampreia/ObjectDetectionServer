@@ -115,11 +115,12 @@ class Detection(Base):
     team_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("teams.id"),
         index=True,
+        nullable=True
     )
 
-    algorithm: Mapped["str"] = mapped_column(String, index=True)
+    model: Mapped["str"] = mapped_column(String, index=True)
     conf_threshold: Mapped["float"] = mapped_column(Float)
-    processing_time_ms: Mapped["int"] = mapped_column(Integer)
+    processing_time_ms: Mapped["float"] = mapped_column(Float)
     created_at: Mapped[datetime] = mapped_column(DateTime)
 
     user: Mapped["User"] = relationship("User")

@@ -7,7 +7,7 @@ from fastapi.params import Query, Form
 
 from app.core.deps import get_detect_service
 from app.core.token import get_current_user
-from app.models.detect import DownloadModelRequest
+from app.models.detect import DownloadModelRequest, DetectionResponse
 from app.services.detect_service import DetectService
 
 detect_router = APIRouter()
