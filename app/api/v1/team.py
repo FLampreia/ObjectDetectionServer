@@ -6,6 +6,7 @@ from starlette import status
 
 from app.core.deps import get_team_service
 from app.core.token import get_current_user
+from app.models.detect import ListDetections
 from app.models.team import TeamRead, TeamCreateAndUpdate, AddTeamMember, RemoveTeamMember, TeamMember, \
     TeamReadWithFavorite, TeamMemberRead
 from app.models.user import UserRead
@@ -121,3 +122,13 @@ def update_team_name(
     logger.info("Updating team name")
 
     service.update_name(team_id=team_id, name=name.name, user_id=current_user.id)
+
+@team_router.get("/team/{team_id}/detections", status_code=status.HTTP_200_OK)
+def get_team_detections(
+        team_id: uuid.UUID,
+        service: TeamService = Depends(get_team_service),
+        current_user=Depends(get_current_user)
+):
+    logger.info("Getting detections for team %s", team_id)
+
+    return service.get_detections(team_id=team_id)

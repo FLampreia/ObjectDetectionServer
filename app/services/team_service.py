@@ -1,13 +1,14 @@
 from sqlite3 import IntegrityError
 
 from pydantic import EmailStr
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.orm import Session, Mapped, joinedload, selectinload
 from uuid import UUID
 
-from app.db.schema import TeamRole, Team, TeamMember, User
+from app.db.schema import TeamRole, Team, TeamMember, User, Detection, DetectedObject
 from app.exceptions.custom_exceptions import UserNotFound, UserAlreadyInTeam, NotTeamOwner, NotAllowedToRemoveOwner, \
     EmailAlreadyExists, UsernameAlreadyExists, DatabaseIntegrityException, TeamNameAlreadyExists, TeamNotFound
+from app.models.detect import ListDetections
 from app.models.team import TeamRead, TeamReadWithFavorite, TeamMemberRead
 from app.services.user_service import UserService
 
@@ -93,7 +94,8 @@ class TeamService:
                 name=team.name,
                 created_at=team.created_at,
                 is_favorite=membership.is_favorite,
-                owner=owners.get(team.id)
+                owner=owners.get(team.id),
+                current_user_role=membership.role
             )
             for team, membership, _ in results
         ]
@@ -240,8 +242,6 @@ class TeamService:
             for member in members
         ]
 
-
-
     def _validate_if_is_member(self, team_id: UUID, requester_id: UUID):
 
         return self._get_member(team_id, requester_id)
@@ -286,7 +286,6 @@ class TeamService:
             .first()
         )
 
-
         if not membership:
             raise ValueError("User is not a member of this team")
 
@@ -309,3 +308,40 @@ class TeamService:
             self._db.rollback()
             self.error = ValueError("Team name already exists")
             raise self.error
+
+    def get_detections(self, team_id: UUID) -> list[ListDetections]:
+        stmt = (
+            select(
+                Detection.id,
+                Detection.created_at,
+                Detection.model,
+                Detection.conf_threshold,
+                Detection.processing_time_ms,
+                Detection.type,
+                User.username,
+                func.count(DetectedObject.id).label("count_objects")
+            )
+            .join(User, User.id == Detection.user_id)
+            .outerjoin(DetectedObject, DetectedObject.detection_id == Detection.id)
+            .where(Detection.team_id == team_id)
+            .group_by(
+                Detection.id,
+                User.username
+            )
+            .order_by(Detection.created_at.desc())
+        )
+
+        result = self._db.execute(stmt).all()
+
+        return [
+            ListDetections(
+                id=r.id,
+                username=r.username,
+                created_at=r.created_at,
+                model=r.model,
+                conf_threshold=r.conf_threshold,
+                processing_time_ms=r.processing_time_ms,
+                count=r.count_objects,
+                type=r.type,
+            ) for r in result
+        ]

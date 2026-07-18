@@ -41,3 +41,4 @@ class TeamReadWithFavorite(BaseModel):
     created_at: datetime
     is_favorite: bool
     owner: TeamMemberRead
+    current_user_role: TeamRole

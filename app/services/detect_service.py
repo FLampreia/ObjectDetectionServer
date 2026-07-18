@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from fastapi import UploadFile
 import json
 from app.core.config import config
-from app.db.schema import Detection, DetectedObject
+from app.db.schema import Detection, DetectedObject, DetectionType
 from app.models.detect import DetectionResponse
 from app.services.user_service import UserService
 
@@ -30,6 +30,7 @@ class DetectService:
             conf_threshold: float,
             created_at: datetime,
             result: DetectionResponse,
+            type: DetectionType
     ):
         detection = Detection(
             user_id=user_id,
@@ -38,6 +39,7 @@ class DetectService:
             conf_threshold=conf_threshold,
             processing_time_ms=result.processing_time_ms,
             created_at=created_at,
+            type=type
         )
 
         self._db.add(detection)
@@ -99,7 +101,8 @@ class DetectService:
             model=algorithm,
             conf_threshold=float(conf_threshold),
             created_at=created_at,
-            result=result
+            result=result,
+            type=DetectionType.Photo,
         )
 
         return response.json()

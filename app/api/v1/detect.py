@@ -13,6 +13,7 @@ from app.services.detect_service import DetectService
 detect_router = APIRouter()
 logger = logging.getLogger(__name__)
 
+
 @detect_router.post("/detect/image")
 async def detect_image(
         algorithm: str = Form(...),
@@ -27,11 +28,6 @@ async def detect_image(
 ):
     logging.info("Received image on server. Sending it to detection...")
 
-    chosen_class_id = [
-        c for c in (chosen_class_id or [])
-        if c and c.strip()
-    ]
-
     return await service.process_image(
         image=image,
         current_user_id=current_user.id,
@@ -41,6 +37,7 @@ async def detect_image(
         algorithm=algorithm
     )
 
+
 @detect_router.get("/detect/models")
 async def get_models_list(
         service: DetectService = Depends(get_detect_service),
@@ -49,6 +46,7 @@ async def get_models_list(
     logging.info("Asking for models on server. Waiting for the processing worker to send them...")
 
     return await service.get_models_list()
+
 
 @detect_router.post("/detect/models/download")
 async def get_models_list(

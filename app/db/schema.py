@@ -96,6 +96,11 @@ class TeamMember(Base):
         back_populates="members"
     )
 
+class DetectionType(enum.Enum):
+    Photo = "photo"
+    Video = "video"
+    Stream = "stream"
+
 class Detection(Base):
     __tablename__ = "detection"
 
@@ -122,6 +127,9 @@ class Detection(Base):
     conf_threshold: Mapped["float"] = mapped_column(Float)
     processing_time_ms: Mapped["float"] = mapped_column(Float)
     created_at: Mapped[datetime] = mapped_column(DateTime)
+    type: Mapped[DetectionType] = mapped_column(
+        Enum(DetectionType)
+    )
 
     user: Mapped["User"] = relationship("User")
     team: Mapped["Team"] = relationship("Team")
