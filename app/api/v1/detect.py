@@ -1,20 +1,25 @@
+import json
+from datetime import datetime
 import logging
+from http.client import responses
 from typing import Optional
 from uuid import UUID
 import httpx
 from fastapi import APIRouter, UploadFile, File, Depends
 from fastapi.params import Query, Form
+from fastapi import status
 
 from app.core.deps import get_detect_service
 from app.core.token import get_current_user
-from app.models.detect import DownloadModelRequest, DetectionResponse
+from app.db.schema import DetectionType
+from app.models.detect import DownloadModelRequest, FrameProcessingResponse, VideoProcessingResponse
 from app.services.detect_service import DetectService
 
 detect_router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-@detect_router.post("/detect/image")
+@detect_router.post("/detect/image", status_code=status.HTTP_200_OK, response_model=FrameProcessingResponse)
 async def detect_image(
         algorithm: str = Form(...),
         conf_threshold: str = Form(...),
@@ -22,40 +27,72 @@ async def detect_image(
         chosen_class_id: list[str] | None = Form(None),
         chosen_team_id: UUID | None = Form(None),
 
-        service: DetectService = Depends(get_detect_service),
+        detect_service: DetectService = Depends(get_detect_service),
         current_user=Depends(get_current_user),
 
 ):
     logging.info("Received image on server. Sending it to detection...")
 
-    return await service.process_image(
-        image=image,
-        current_user_id=current_user.id,
-        conf_threshold=conf_threshold,
-        chosen_team_id=chosen_team_id,
-        chosen_class_id=chosen_class_id,
-        algorithm=algorithm
-    )
+    try:
+        return await detect_service.process_image(
+            image=image,
+            current_user_id=current_user.id,
+            conf_threshold=conf_threshold,
+            chosen_team_id=chosen_team_id,
+            chosen_class_id=chosen_class_id,
+            algorithm=algorithm
+        )
+    except Exception as e:
+        logging.error("Error occurred on detection: %s", e)
 
 
-@detect_router.get("/detect/models")
-async def get_models_list(
-        service: DetectService = Depends(get_detect_service),
-        current_user=Depends(get_current_user)
+@detect_router.post("/save/detections", status_code=status.HTTP_200_OK)
+async def save_detections_to_db(
+        result: VideoProcessingResponse,
+        algorithm: str,
+        conf_threshold: float,
+        chosen_team_id: UUID | None = None,
+
+        detect_service: DetectService = Depends(get_detect_service),
+        current_user=Depends(get_current_user),
 ):
-    logging.info("Asking for models on server. Waiting for the processing worker to send them...")
+    logging.info("Received detection data on server. Storing detections on database...")
 
-    return await service.get_models_list()
+    try:
+        detect_service.add_video_detection_to_db(
+            user_id=current_user.id,
+            team_id=chosen_team_id,
+            model=algorithm,
+            conf_threshold=conf_threshold,
+            created_at=datetime.now(),
+            result=result,
+        )
 
+    except Exception as e:
+        logging.error("Error occurred on storing: %s", e)
 
-@detect_router.post("/detect/models/download")
-async def get_models_list(
-        payload: DownloadModelRequest,
-        service: DetectService = Depends(get_detect_service),
-        current_user=Depends(get_current_user)
-):
-    logging.info("Asking to download a model. Waiting for the processing worker to download it...")
-
-    result = await service.download_model(payload.name)
-
-    return {"status": "ok", "result": result}
+#
+#
+# @detect_router.post("/detect/video")
+# async def detect_video(
+#         algorithm: str = Form(...),
+#         conf_threshold: str = Form(...),
+#         video: UploadFile = File(...),
+#         chosen_class_id: list[str] | None = Form(None),
+#         chosen_team_id: UUID | None = Form(None),
+#
+#         detect_service: DetectService = Depends(get_detect_service),
+#         current_user=Depends(get_current_user),
+# ):
+#     logging.info("Received video on server. Sending it to detection...")
+#     try:
+#         return await detect_service.process_video(
+#             video=video,
+#             current_user_id=current_user.id,
+#             conf_threshold=conf_threshold,
+#             chosen_team_id=chosen_team_id,
+#             chosen_class_id=chosen_class_id,
+#             algorithm=algorithm
+#         )
+#     except Exception as e:
+#         logging.error("Error occurred on detection: %s", e)

@@ -24,3 +24,4 @@ def get_detect_service(
         user_service: UserService = Depends(get_user_service)
     ) -> DetectService:
     return DetectService(session=db, user_service=user_service)
+

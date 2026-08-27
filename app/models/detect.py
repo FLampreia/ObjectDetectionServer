@@ -16,12 +16,13 @@ class Detection(BaseModel):
     bbox: list[float]
 
 
-class DetectionResponse(BaseModel):
-    filename: str
-    size_x: int
-    size_y: int
-    processing_time_ms: float
-    detections: list[Detection]
+class FrameProcessingResponse(BaseModel):
+    processing_time_per_frame: float
+    detections_per_frame: list[Detection]
+
+class VideoProcessingResponse(BaseModel):
+    processing_time: float
+    detections_per_frame: list[Detection]
 
 class ListDetections(BaseModel):
     id: uuid.UUID
