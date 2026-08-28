@@ -51,12 +51,20 @@ async def save_detections_to_db(
         result: VideoProcessingResponse,
         algorithm: str,
         conf_threshold: float,
+        detection_type: str,
         chosen_team_id: UUID | None = None,
 
         detect_service: DetectService = Depends(get_detect_service),
         current_user=Depends(get_current_user),
 ):
     logging.info("Received detection data on server. Storing detections on database...")
+
+    if detection_type == "video":
+        choosen_type = DetectionType.Video
+    elif detection_type == "stream":
+        choosen_type = DetectionType.Stream
+    else:
+        raise ValueError(f"Invalid detection type: {type}")
 
     try:
         detect_service.add_video_detection_to_db(
@@ -66,6 +74,7 @@ async def save_detections_to_db(
             conf_threshold=conf_threshold,
             created_at=datetime.now(),
             result=result,
+            detection_type=choosen_type,
         )
 
     except Exception as e:

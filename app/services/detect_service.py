@@ -30,7 +30,7 @@ class DetectService:
             conf_threshold: float,
             created_at: datetime,
             result: FrameProcessingResponse,
-            type: DetectionType
+            detection_type: DetectionType
     ):
         detection = Detection(
             user_id=user_id,
@@ -39,7 +39,7 @@ class DetectService:
             conf_threshold=conf_threshold,
             processing_time_ms=result.processing_time_per_frame,
             created_at=created_at,
-            type=type
+            type=detection_type
         )
 
         self._db.add(detection)
@@ -64,9 +64,9 @@ class DetectService:
             model: str,
             conf_threshold: float,
             created_at: datetime,
+            detection_type: DetectionType,
             result: VideoProcessingResponse,
     ):
-        print (result)
 
         detection = Detection(
             user_id=user_id,
@@ -75,7 +75,7 @@ class DetectService:
             conf_threshold=conf_threshold,
             processing_time_ms=result.processing_time,
             created_at=created_at,
-            type=DetectionType.Video
+            type=detection_type,
         )
 
         self._db.add(detection)
@@ -135,7 +135,7 @@ class DetectService:
             conf_threshold=float(conf_threshold),
             created_at=created_at,
             result=result,
-            type=DetectionType.Photo,
+            detection_type=DetectionType.Photo,
         )
 
         return response.json()
