@@ -131,4 +131,4 @@ def get_team_detections(
 ):
     logger.info("Getting detections for team %s", team_id)
 
-    return service.get_detections(team_id=team_id)
+    return service.get_detections_from_team_id(team_id=team_id)

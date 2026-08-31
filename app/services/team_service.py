@@ -309,7 +309,7 @@ class TeamService:
             self.error = ValueError("Team name already exists")
             raise self.error
 
-    def get_detections(self, team_id: UUID) -> list[ListDetections]:
+    def get_detections_from_team_id(self, team_id: UUID) -> list[ListDetections]:
         stmt = (
             select(
                 Detection.id,
