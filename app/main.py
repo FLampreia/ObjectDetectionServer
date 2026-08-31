@@ -8,6 +8,7 @@ from starlette.middleware.cors import CORSMiddleware
 
 from app.api.v1.auth import auth_router
 from app.api.v1.detect import detect_router
+from app.api.v1.detections import detections_router
 from app.api.v1.models import models_router
 from app.api.v1.socket import socket_router
 from app.api.v1.team import team_router
@@ -99,6 +100,12 @@ def create_app(engine = None, with_lifespan: bool = True) -> FastAPI:
         models_router,
         prefix=f"/api/v{config.version}",
         tags=["Models"]
+    )
+
+    fastapi_app.include_router(
+        detections_router,
+        prefix=f"/api/v{config.version}",
+        tags=["Detections"]
     )
 
     return fastapi_app

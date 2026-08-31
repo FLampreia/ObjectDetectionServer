@@ -33,3 +33,9 @@ class ListDetections(BaseModel):
     processing_time_ms: float
     count: int
     type: DetectionType
+
+class ListObjects(BaseModel):
+    id: uuid.UUID
+    obj_name: str
+    obj_class_id: int
+    confidence: float
