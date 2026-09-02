@@ -19,7 +19,7 @@ def get_detections_objects(
 ):
 
     logger.info("Getting all detections for logged user %s", current_user.id)
-    # print(service.get_all_detection_from_logged_user(current_user))
+
     return service.get_all_detection_from_logged_user(current_user)
 
 @detections_router.get("/detections/{detection_id}/objects", status_code=status.HTTP_200_OK)
@@ -33,3 +33,12 @@ def get_detections_objects(
     logger.info("Getting objects for detection %s", detection_id)
 
     return service.get_objects_from_detection(detection_id)
+
+@detections_router.get("/detections/stats", status_code=status.HTTP_200_OK)
+def get_detections_stats(
+        service: DetectionService = Depends(get_detections_service),
+        current_user=Depends(get_current_user)
+):
+    logger.info("Getting detections stats for logged user %s", current_user.id)
+
+    return service.get_detections_stats(current_user)
