@@ -15,10 +15,19 @@ class DetectionService:
     def __init__(
             self,
             session: Session,
-            user_service: UserService
     ):
         self._db = session
-        self._user_service = user_service
+
+    def get_detection(
+            self,
+            detection_id: uuid.UUID,
+    ) -> Detection | None:
+        stmt = (
+            select(Detection)
+            .where(Detection.id == detection_id)
+        )
+
+        return self._db.scalar(stmt)
 
     def get_all_detection_from_logged_user(
             self,
@@ -174,7 +183,6 @@ class DetectionService:
             )
             for row in detection_types
         ]
-
 
         # Últimas deteções
         last_detections_result = self._db.execute(

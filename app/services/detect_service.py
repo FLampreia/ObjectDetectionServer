@@ -17,10 +17,8 @@ class DetectService:
     def __init__(
             self,
             session: Session,
-            user_service: UserService
     ):
         self._db = session
-        self._user_service = user_service
 
     def add_detection_to_db(
             self,
