@@ -307,28 +307,16 @@ class ReportService:
         line_width = max(2, round(min(width, height) / 250))
 
         if all(value is not None for value in area):
-            x1, y1, x2, y2 = area
 
             # Area coordinates are normalized between 0 and 1.
             draw.rectangle(
-                (
-                    int(x1 * width),
-                    int(y1 * height),
-                    int(x2 * width),
-                    int(y2 * height),
-                ),
+                area,
                 outline="blue",
                 width=line_width,
             )
 
 
         for obj in objects:
-            bbox = (
-                obj.bbox.x1,
-                obj.bbox.y1,
-                obj.bbox.x2,
-                obj.bbox.y2,
-            )
 
             x_center = (obj.bbox.x1 + obj.bbox.x2) / 2
             y_center = (obj.bbox.y1 + obj.bbox.y2) / 2
@@ -343,14 +331,8 @@ class ReportService:
                 fill="yellow"
             )
 
-            draw.rectangle(
-                bbox,
-                outline="red",
-                width=line_width,
-            )
-
             draw.text(
-                (bbox[0], max(0, bbox[1] - 15)),
+                (x_center, max(0, y_center - 15)),
                 f"{obj.obj_name} {obj.confidence:.0%}",
                 fill="red",
             )

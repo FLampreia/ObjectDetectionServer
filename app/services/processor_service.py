@@ -61,10 +61,10 @@ class DetectService:
                 object_name=obj.class_name,
                 object_class_id=obj.class_id,
                 confidence=obj.confidence,
-                bbox_x1=obj.bbox[0],
-                bbox_y1=obj.bbox[1],
-                bbox_x2=obj.bbox[2],
-                bbox_y2=obj.bbox[3],
+                bbox_x1=(obj.bbox[0] + area.x1),
+                bbox_y1=(obj.bbox[1] + area.y1),
+                bbox_x2=(obj.bbox[2] + area.x1),
+                bbox_y2=(obj.bbox[3] + area.y1),
             )
 
             self._db.add(detected_object)
