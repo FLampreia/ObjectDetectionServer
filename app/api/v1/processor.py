@@ -9,11 +9,16 @@ from fastapi import APIRouter, UploadFile, File, Depends
 from fastapi.params import Query, Form
 from fastapi import status
 
-from app.core.deps import get_detect_service
+from app.core.deps import get_detect_service, parse_area
 from app.core.token import get_current_user
 from app.db.schema import DetectionType
-from app.models.detect import DownloadModelRequest, FrameProcessingResponse, VideoProcessingResponse
-from app.services.detect_service import DetectService
+from app.models.detect import DownloadModelRequest, FrameProcessingResponse, VideoProcessingResponse, Area
+from app.services.processor_service import DetectService
+from fastapi import HTTPException
+from pydantic import ValidationError
+
+from app.services.cloudinary_service import upload_image
+
 
 detect_router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -26,24 +31,45 @@ async def detect_image(
         image: UploadFile = File(...),
         chosen_class_id: list[str] | None = Form(None),
         chosen_team_id: UUID | None = Form(None),
+        area: Area | None = Depends(parse_area),
 
         detect_service: DetectService = Depends(get_detect_service),
         current_user=Depends(get_current_user),
 
 ):
-    logging.info("Received image on server. Sending it to detection...")
+    logging.info("Received image on server.")
+
+    # Upload image to Cloudinary
+    try:
+        uploaded = await upload_image(image)
+    except Exception:
+        logger.error("Failed uploading image to Cloudinary.")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="It was not possible to save the image on Cloudinary.",
+        )
+
+    logging.info("Sending it to detection...")
 
     try:
+        # Process image
         return await detect_service.process_image(
             image=image,
             current_user_id=current_user.id,
             conf_threshold=conf_threshold,
             chosen_team_id=chosen_team_id,
             chosen_class_id=chosen_class_id,
-            algorithm=algorithm
+            algorithm=algorithm,
+            area=area,
+            image_public_id=uploaded["public_id"],
+            image_url=uploaded["secure_url"],
         )
-    except Exception as e:
-        logging.error("Error occurred on detection: %s", e)
+    except Exception:
+        logger.exception("Failed processing image.")
+        raise HTTPException(
+            status_code=500,
+            detail="It was not possible to process the image.",
+        )
 
 
 @detect_router.post("/save/detections", status_code=status.HTTP_200_OK)

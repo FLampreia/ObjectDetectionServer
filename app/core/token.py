@@ -4,7 +4,7 @@ from fastapi.security.http import HTTPAuthorizationCredentials
 
 
 from app.core.deps import get_user_service
-from app.core.redis_config import token_in_blocklist, is_session_revoked
+from app.services.redis_service import token_in_blocklist, is_session_revoked
 from app.exceptions.custom_exceptions import (
     InvalidToken,
     RefreshTokenRequired,

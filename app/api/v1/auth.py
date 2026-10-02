@@ -6,8 +6,7 @@ from app.core.config import config
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from starlette import status
-from app.core.redis_config import add_jti_to_blocklist, token_in_blocklist, revoke_session, \
-    is_session_revoked
+from app.services.redis_service import add_jti_to_blocklist, token_in_blocklist, revoke_session, is_session_revoked
 from app.core.security import create_token, decode_token
 from app.core.token import get_user_service, get_current_user, AccessTokenBearer, RefreshTokenBearer
 from app.exceptions.custom_exceptions import InvalidCredentials, InvalidToken, InvalidSession, MalformedToken, \

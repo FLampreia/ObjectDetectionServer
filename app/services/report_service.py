@@ -1,10 +1,12 @@
 import uuid
 from datetime import date, datetime, time
 from io import BytesIO
+
+import httpx
 from fastapi.responses import Response
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
-from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import mm
 from reportlab.platypus import (
     SimpleDocTemplate,
@@ -12,7 +14,10 @@ from reportlab.platypus import (
     Spacer,
     Table,
     TableStyle,
+    Image as PDFImage,
+    PageBreak
 )
+from PIL import Image as PILImage, ImageDraw
 
 from sqlalchemy import select, func
 from sqlalchemy.orm import Session
@@ -319,6 +324,7 @@ class ReportService:
         styles = getSampleStyleSheet()
         elements = []
 
+        # Title
         elements.append(
             Paragraph(
                 "ObjectDetection",
@@ -326,6 +332,7 @@ class ReportService:
             )
         )
 
+        # Subtitle
         elements.append(
             Paragraph(
                 f"Detection Report #{detection.id}",
@@ -362,6 +369,33 @@ class ReportService:
             highest_confidence = 0
             lowest_confidence = 0
             unique_classes = 0
+
+        area_style = ParagraphStyle(
+            "AreaInfo",
+            parent=styles["Normal"],
+            fontSize=9,
+            leading=13,
+            spaceBefore=0,
+            spaceAfter=0,
+        )
+
+        coordinates = (
+            detection.area_x1,
+            detection.area_y1,
+            detection.area_x2,
+            detection.area_y2,
+        )
+
+        if all(value is not None for value in coordinates):
+            area_content = Paragraph(
+                f"<b>Start Point:</b> "
+                f"x = {detection.area_x1:g}, y = {detection.area_y1:g}<br/>"
+                f"<b>Final Point:</b> "
+                f"x = {detection.area_x2:g}, y = {detection.area_y2:g}",
+                area_style,
+            )
+        else:
+            area_content = "Undefined"
 
         # Informações gerais da deteção
         information_data = [
@@ -404,6 +438,10 @@ class ReportService:
             [
                 "Lowest Confidence",
                 f"{lowest_confidence * 100:.2f}%"
+            ],
+            [
+                "Area",
+                area_content
             ],
         ]
 
@@ -478,6 +516,37 @@ class ReportService:
         )
 
         elements.append(information_table)
+        elements.append(Spacer(1, 20))
+
+        elements.append(
+            Paragraph(
+                "Processed Result",
+                styles["Heading2"],
+            )
+        )
+
+        elements.append(Spacer(1, 8))
+
+        response = httpx.get(detection.image_url, timeout=30.0)
+        response.raise_for_status()
+        image_buffer = BytesIO(response.content)
+
+        # Calcular o tamanho mantendo as proporções
+        with PILImage.open(image_buffer) as source:
+            width, height = source.size
+
+        scale = min(document.width / width, (100 * mm) / height)
+        image_buffer.seek(0)
+
+        # Criar a imagem para o PDF
+        image = PDFImage(
+            image_buffer,
+            width=width * scale,
+            height=height * scale,
+        )
+        image.hAlign = "CENTER"
+
+        elements.append(image)
         elements.append(Spacer(1, 20))
 
         class_summary = {}
@@ -598,3 +667,70 @@ class ReportService:
         document.build(elements)
 
         return buffer.getvalue()
+
+    def _create_annotated_image(
+            self,
+            detection,
+            objects: list[DetectedObject],
+    ) -> tuple[BytesIO, int, int]:
+        response = httpx.get(
+            detection.image_url,
+            timeout=30.0,
+        )
+        response.raise_for_status()
+
+        with PILImage.open(BytesIO(response.content)) as source:
+            image = source.convert("RGB")
+
+        width, height = image.size
+        draw = ImageDraw.Draw(image)
+        line_width = max(2, round(min(width, height) / 250))
+
+        area = (
+            detection.area_x1,
+            detection.area_y1,
+            detection.area_x2,
+            detection.area_y2,
+        )
+
+        # A área está normalizada entre 0 e 1.
+        if all(value is not None for value in area):
+            x1, y1, x2, y2 = area
+
+            draw.rectangle(
+                (
+                    int(x1 * width),
+                    int(y1 * height),
+                    int(x2 * width),
+                    int(y2 * height),
+                ),
+                outline="blue",
+                width=line_width,
+            )
+
+        # As bounding boxes estão em píxeis da imagem original.
+        for obj in objects:
+            bbox = (
+                obj.bbox_x1,
+                obj.bbox_y1,
+                obj.bbox_x2,
+                obj.bbox_y2,
+            )
+
+            draw.rectangle(
+                bbox,
+                outline="red",
+                width=line_width,
+            )
+
+            draw.text(
+                (bbox[0], max(0, bbox[1] - 15)),
+                f"{obj.object_name} {obj.confidence:.0%}",
+                fill="red",
+            )
+
+        output = BytesIO()
+        image.save(output, format="PNG")
+        output.seek(0)
+
+        return output, width, height

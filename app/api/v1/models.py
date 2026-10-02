@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends
 from app.core.deps import get_detect_service
 from app.core.token import get_current_user
 from app.models.detect import DownloadModelRequest
-from app.services.detect_service import DetectService
+from app.services.processor_service import DetectService
 
 models_router = APIRouter()
 logger = logging.getLogger(__name__)

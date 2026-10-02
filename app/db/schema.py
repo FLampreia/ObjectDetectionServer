@@ -131,6 +131,19 @@ class Detection(Base):
         Enum(DetectionType)
     )
 
+    area_x1: Mapped[float | None] = mapped_column(Float, nullable=True)
+    area_y1: Mapped[float | None] = mapped_column(Float, nullable=True)
+    area_x2: Mapped[float | None] = mapped_column(Float, nullable=True)
+    area_y2: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    image_public_id: Mapped[str | None] = mapped_column(
+        String, nullable=True
+    )
+
+    image_url: Mapped[str | None] = mapped_column(
+        String, nullable=True
+    )
+
     user: Mapped["User"] = relationship("User")
     team: Mapped["Team"] = relationship("Team")
 
@@ -158,6 +171,11 @@ class DetectedObject(Base):
     object_name: Mapped[str] = mapped_column(String, index=True)
     object_class_id: Mapped[int] = mapped_column(Integer, index=True)
     confidence: Mapped[float] = mapped_column(Float)
+
+    bbox_x1: Mapped[float | None] = mapped_column(Float, nullable=False)
+    bbox_y1: Mapped[float | None] = mapped_column(Float, nullable=False)
+    bbox_x2: Mapped[float | None] = mapped_column(Float, nullable=False)
+    bbox_y2: Mapped[float | None] = mapped_column(Float, nullable=False)
 
     detection: Mapped["Detection"] = relationship(
         "Detection",

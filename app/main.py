@@ -7,7 +7,7 @@ from starlette.middleware.cors import CORSMiddleware
 
 
 from app.api.v1.auth import auth_router
-from app.api.v1.detect import detect_router
+from app.api.v1.processor import detect_router
 from app.api.v1.detections import detections_router
 from app.api.v1.models import models_router
 from app.api.v1.socket import socket_router
@@ -15,7 +15,7 @@ from app.api.v1.team import team_router
 from app.api.v1.user import user_router
 from app.core.config import config
 from app.core.logging_config import setup_logging
-from app.core.redis_config import check_redis_connection
+from app.services.redis_service import check_redis_connection
 from app.db.schema import Base
 from app.db.database import engine as default_engine
 from app.exceptions.register import register_all_exceptions
@@ -55,7 +55,6 @@ def create_app(engine = None, with_lifespan: bool = True) -> FastAPI:
         allow_origins=[
             "http://localhost:3000",
             "http://192.168.1.66:3000",  # pc casa mae
-            "http://192.168.1.145:3000"  # pc casa leonor
         ],
         # allow_origins=["*"],
         allow_credentials=True,

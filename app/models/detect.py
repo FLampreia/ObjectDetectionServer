@@ -16,6 +16,11 @@ class Detection(BaseModel):
     confidence: float
     bbox: list[float]
 
+class Area(BaseModel):
+    x1: float
+    y1: float
+    x2: float
+    y2: float
 
 class FrameProcessingResponse(BaseModel):
     processing_time_per_frame: float
