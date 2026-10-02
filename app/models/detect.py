@@ -14,13 +14,13 @@ class Detection(BaseModel):
     class_id: int
     class_name: str
     confidence: float
-    bbox: list[float]
+    bbox: list[int]
 
 class Area(BaseModel):
-    x1: float
-    y1: float
-    x2: float
-    y2: float
+    x1: int
+    y1: int
+    x2: int
+    y2: int
 
 class FrameProcessingResponse(BaseModel):
     processing_time_per_frame: float
@@ -48,3 +48,4 @@ class ListObjects(BaseModel):
     obj_name: str
     obj_class_id: int
     confidence: float
+    bbox: Area

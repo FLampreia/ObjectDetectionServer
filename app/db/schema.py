@@ -131,10 +131,10 @@ class Detection(Base):
         Enum(DetectionType)
     )
 
-    area_x1: Mapped[float | None] = mapped_column(Float, nullable=True)
-    area_y1: Mapped[float | None] = mapped_column(Float, nullable=True)
-    area_x2: Mapped[float | None] = mapped_column(Float, nullable=True)
-    area_y2: Mapped[float | None] = mapped_column(Float, nullable=True)
+    area_x1: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    area_y1: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    area_x2: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    area_y2: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     image_public_id: Mapped[str | None] = mapped_column(
         String, nullable=True
@@ -172,10 +172,10 @@ class DetectedObject(Base):
     object_class_id: Mapped[int] = mapped_column(Integer, index=True)
     confidence: Mapped[float] = mapped_column(Float)
 
-    bbox_x1: Mapped[float | None] = mapped_column(Float, nullable=False)
-    bbox_y1: Mapped[float | None] = mapped_column(Float, nullable=False)
-    bbox_x2: Mapped[float | None] = mapped_column(Float, nullable=False)
-    bbox_y2: Mapped[float | None] = mapped_column(Float, nullable=False)
+    bbox_x1: Mapped[int | None] = mapped_column(Integer, nullable=False)
+    bbox_y1: Mapped[int | None] = mapped_column(Integer, nullable=False)
+    bbox_x2: Mapped[int | None] = mapped_column(Integer, nullable=False)
+    bbox_y2: Mapped[int | None] = mapped_column(Integer, nullable=False)
 
     detection: Mapped["Detection"] = relationship(
         "Detection",

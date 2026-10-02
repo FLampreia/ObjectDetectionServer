@@ -1,11 +1,11 @@
 import uuid
-from datetime import datetime, time
+from datetime import datetime, time, date
 from typing import List
-from sqlalchemy import select, func
+from sqlalchemy import select, func, Row
 from sqlalchemy.orm import Session
 
 from app.db.schema import DetectedObject, User, Detection
-from app.models.detect import ListObjects, ListDetections
+from app.models.detect import ListObjects, ListDetections, Area
 from app.models.stats import ModelsUsage, DetectionTypeUsage, TopObject, Stats
 from app.services.user_service import UserService
 
@@ -85,6 +85,10 @@ class DetectionService:
                 DetectedObject.object_name,
                 DetectedObject.object_class_id,
                 DetectedObject.confidence,
+                DetectedObject.bbox_x1,
+                DetectedObject.bbox_y1,
+                DetectedObject.bbox_x2,
+                DetectedObject.bbox_y2,
             )
             .where(DetectedObject.detection_id == detection_id)
         )
@@ -97,6 +101,12 @@ class DetectionService:
                 obj_name=r.object_name,
                 obj_class_id=r.object_class_id,
                 confidence=r.confidence,
+                bbox=Area(
+                    x1=r.bbox_x1,
+                    y1=r.bbox_y1,
+                    x2=r.bbox_x2,
+                    y2=r.bbox_y2,
+                )
             ) for r in result
         ]
 
@@ -242,3 +252,51 @@ class DetectionService:
 
             last_detections=last_detections,
         )
+
+    def get_detections_for_interval(
+        self,
+        user_id: uuid.UUID,
+        start_date: date,
+        end_date: date,
+    ) -> list[ListDetections]:
+        start_datetime = datetime.combine(
+            start_date,
+            time.min,
+        )
+
+        end_datetime = datetime.combine(
+            end_date,
+            time.max,
+        )
+
+        stmt = (
+            select(
+                Detection.id,
+                Detection.created_at,
+                Detection.model,
+                Detection.conf_threshold,
+                Detection.processing_time_ms,
+                Detection.type,
+                func.count(DetectedObject.id).label("count_objects"),
+            )
+            .outerjoin(
+                DetectedObject,
+                DetectedObject.detection_id == Detection.id
+            )
+            .where(
+                Detection.user_id == user_id,
+                Detection.created_at >= start_datetime,
+                Detection.created_at <= end_datetime,
+            )
+            .group_by(
+                Detection.id,
+                Detection.created_at,
+                Detection.model,
+                Detection.conf_threshold,
+                Detection.processing_time_ms,
+                Detection.type,
+            )
+            .order_by(Detection.created_at.desc())
+        )
+
+        return self._db.execute(stmt).all()

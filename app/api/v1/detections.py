@@ -67,7 +67,7 @@ def generate_report_interval(
         end_date,
     )
 
-    return service.generate_report_interval(
+    return service.generate_interval_detections_report(
         user_id=current_user.id,
         start_date=start_date,
         end_date=end_date,
@@ -84,6 +84,6 @@ def generate_detection_report(
         f"Generating detection report for detection {detection_id} "
     )
 
-    return service.generate_detection_report(
+    return service.generate_single_detection_report(
         detection_id=detection_id,
     )
