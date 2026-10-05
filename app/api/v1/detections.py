@@ -77,6 +77,19 @@ def generate_report_interval(
 @detections_router.get("/report/detection/{detection_id}")
 def generate_detection_report(
         detection_id: uuid.UUID,
+
+        bbox_enable: bool,
+        bbox_label_enable: bool,
+        dot_enable: bool,
+        dot_label_enable: bool,
+
+        area_color: str,
+
+        bbox_color: str,
+        dot_color: str,
+        text_color: str,
+        text_background_color: str,
+
         service: ReportService = Depends(get_report_service),
         current_user=Depends(get_current_user),
 ):
@@ -86,4 +99,14 @@ def generate_detection_report(
 
     return service.generate_single_detection_report(
         detection_id=detection_id,
+        area_color=area_color,
+        bbox_color=bbox_color,
+        dot_color=dot_color,
+        text_color=text_color,
+        text_background_color=text_background_color,
+        bbox_enable=bbox_enable,
+        bbox_label_enable=bbox_label_enable,
+        dot_enable=dot_enable,
+        dot_label_enable=dot_label_enable,
+
     )

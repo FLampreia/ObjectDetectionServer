@@ -54,18 +54,44 @@ class ReportService:
 
         return self._create_pdf_response(pdf, filename)
 
-    def generate_single_detection_report(self, detection_id: uuid.UUID) -> Response:
+    def generate_single_detection_report(
+            self,
+            detection_id: uuid.UUID,
+
+            bbox_enable: bool,
+            bbox_label_enable: bool,
+            dot_enable: bool,
+            dot_label_enable: bool,
+
+            area_color: str,
+
+            bbox_color: str,
+            dot_color: str,
+            text_color: str,
+            text_background_color: str,
+    ) -> Response:
 
         detection = self._detection_service.get_detection(detection_id)
 
         objects = self._detection_service.get_objects_from_detection(detection_id)
 
-        pdf = self._create_detection_pdf(detection, objects)
+        pdf = self._create_detection_pdf(
+            detection,
+            objects,
+            area_color=area_color,
+            bbox_color=bbox_color,
+            dot_color=dot_color,
+            text_color=text_color,
+            text_background_color=text_background_color,
+            bbox_enable=bbox_enable,
+            bbox_label_enable=bbox_label_enable,
+            dot_enable=dot_enable,
+            dot_label_enable=dot_label_enable,
+        )
 
         return self._create_pdf_response(pdf, f"detection-report-{detection_id}.pdf")
 
     # Shared PDF configuration
-
     def _create_pdf_response(self, pdf: bytes, filename: str) -> Response:
         return Response(
             content=pdf,
@@ -148,6 +174,14 @@ class ReportService:
         document.build(elements)
         return buffer.getvalue()
 
+    def _format_processing_time(self, ms: float) -> str:
+        if ms < 1000:
+            return f"{ms:.2f} ms"
+        elif ms < 60000:
+            return f"{ms / 1000:.2f} s"
+        else:
+            return f"{ms / 60000:.2f} min"
+
     def _create_interval_table(self, detections: list[ListDetections]) -> Table:
         rows = [[
             "Date", "Model", "Threshold Set", "Processing Time", "Nº Objects", "Type",
@@ -157,7 +191,7 @@ class ReportService:
                 detection.created_at.strftime("%d/%m/%Y %H:%M"),
                 detection.model,
                 f"{detection.conf_threshold * 100:.0f}%",
-                f"{detection.processing_time_ms:.3f} ms",
+                f"{self._format_processing_time(detection.processing_time_ms)}",
                 str(detection.count),
                 detection.type.value,
             ])
@@ -176,6 +210,18 @@ class ReportService:
             self,
             detection: Detection,
             objects: list[ListObjects],
+
+            bbox_enable: bool,
+            bbox_label_enable: bool,
+            dot_enable: bool,
+            dot_label_enable: bool,
+
+            area_color: str,
+
+            bbox_color: str,
+            dot_color: str,
+            text_color: str,
+            text_background_color: str,
     ) -> bytes:
         buffer = BytesIO()
         document = self._create_document(buffer)
@@ -184,9 +230,26 @@ class ReportService:
         elements = self._create_header(
             f"Detection Report #{detection.id}", styles, spacing=10,
         )
+
         elements.append(self._create_information_table(detection, objects, styles))
         elements.append(Spacer(1, 20))
-        elements.extend(self._create_image_section(detection, objects, document.width, styles))
+
+        elements.extend(self._create_image_section(
+            detection,
+            objects,
+            document.width,
+            styles,
+            area_color=area_color,
+            bbox_color=bbox_color,
+            dot_color=dot_color,
+            text_color=text_color,
+            text_background_color=text_background_color,
+            bbox_enable=bbox_enable,
+            bbox_label_enable=bbox_label_enable,
+            dot_enable=dot_enable,
+            dot_label_enable=dot_label_enable,
+        ))
+
         if objects:
             elements.extend(self._create_class_summary_section(objects, styles))
         elements.extend(self._create_objects_section(objects, styles))
@@ -250,7 +313,7 @@ class ReportService:
             ["Date", detection.created_at.strftime("%d/%m/%Y %H:%M")],
             ["Model", detection.model],
             ["Threshold Set", f"{detection.conf_threshold * 100:.0f}%"],
-            ["Processing Time", f"{detection.processing_time_ms:.3f} ms"],
+            ["Processing Time", f"{self._format_processing_time(detection.processing_time_ms)}"],
             ["Type", detection_type],
             ["Objects Detected", str(len(objects))],
             ["Classes Detected", str(statistics["unique_classes"])],
@@ -269,6 +332,18 @@ class ReportService:
             objects: List[ListObjects],
             max_width: float,
             styles: StyleSheet1,
+
+            bbox_enable: bool,
+            bbox_label_enable: bool,
+            dot_enable: bool,
+            dot_label_enable: bool,
+
+            area_color: str,
+
+            bbox_color: str,
+            dot_color: str,
+            text_color: str,
+            text_background_color: str,
     ) -> list[Flowable]:
         return [
             Paragraph("Processed Result", styles["Heading2"]),
@@ -283,6 +358,15 @@ class ReportService:
                     detection.area_y2
                 ],
                 objects=objects,
+                area_color=area_color,
+                bbox_color=bbox_color,
+                dot_color=dot_color,
+                text_color=text_color,
+                text_background_color=text_background_color,
+                bbox_enable=bbox_enable,
+                bbox_label_enable=bbox_label_enable,
+                dot_enable=dot_enable,
+                dot_label_enable=dot_label_enable,
             ),
             Spacer(1, 20),
         ]
@@ -294,6 +378,19 @@ class ReportService:
             area: list[float | None],
             objects: list[ListObjects] | None = None,
             max_height: float = 100 * mm,
+
+            bbox_enable: bool = True,
+            bbox_label_enable: bool = True,
+            dot_enable: bool = False,
+            dot_label_enable: bool = False,
+
+            area_color: str = "blue",
+
+            bbox_color: str = "red",
+            dot_color: str = "yellow",
+            text_color: str = "yellow",
+            text_background_color: str = "black",
+
     ) -> PDFImage:
 
         response = httpx.get(image_url, timeout=30.0)
@@ -306,36 +403,86 @@ class ReportService:
         draw = ImageDraw.Draw(annotated_image)
         line_width = max(2, round(min(width, height) / 250))
 
-        if all(value is not None for value in area):
 
+        if all(value is not None for value in area):
             # Area coordinates are normalized between 0 and 1.
             draw.rectangle(
                 area,
-                outline="blue",
+                outline=area_color,
                 width=line_width,
             )
 
+        for index, obj in enumerate(objects, start=1):
 
-        for obj in objects:
+            # Label
+            label = f"{index} - {obj.confidence:.0%}"
 
+            # Center of the object
             x_center = (obj.bbox.x1 + obj.bbox.x2) / 2
             y_center = (obj.bbox.y1 + obj.bbox.y2) / 2
 
-            draw.ellipse(
-                (
-                    x_center - 5,
-                    y_center - 5,
-                    x_center + 5,
-                    y_center + 5
-                ),
-                fill="yellow"
+            # Position of the text
+            text_position = (
+                (x_center if dot_label_enable else obj.bbox.x1) + 3,
+                max(0, ((y_center - 12) if dot_label_enable else obj.bbox.y1) - 3),
             )
 
-            draw.text(
-                (x_center, max(0, y_center - 15)),
-                f"{obj.obj_name} {obj.confidence:.0%}",
-                fill="red",
-            )
+            # Draw bounding box
+            if bbox_enable:
+                bbox = (
+                    obj.bbox.x1,
+                    obj.bbox.y1,
+                    obj.bbox.x2,
+                    obj.bbox.y2,
+                )
+
+                draw.rectangle(
+                    bbox,
+                    outline=bbox_color,
+                    width=line_width,
+                )
+
+            # Draw a dot at the center of the object
+            if dot_enable:
+
+                draw.ellipse(
+                    (
+                        x_center - 5,
+                        y_center - 5,
+                        x_center + 5,
+                        y_center + 5
+                    ),
+                    fill=dot_color
+                )
+
+            if dot_label_enable or bbox_label_enable:
+
+                # Area occupied by text
+                label_bbox = draw.textbbox(
+                    text_position,
+                    label,
+                    anchor="ms" if dot_label_enable else "ls",
+                )
+
+                # Drawing background
+                padding = 3
+                draw.rectangle(
+                    (
+                        label_bbox[0] - padding,
+                        label_bbox[1] - padding,
+                        label_bbox[2] + padding,
+                        label_bbox[3] + padding,
+                    ),
+                    fill=text_background_color,
+                )
+
+                # Drawing text above
+                draw.text(
+                    text_position,
+                    label,
+                    fill=text_color,
+                    anchor="ms" if dot_label_enable else "ls",
+                )
 
         image_buffer = BytesIO()
         annotated_image.save(image_buffer, format="PNG")
@@ -397,85 +544,16 @@ class ReportService:
             elements.append(Paragraph("No objects were detected.", styles["Normal"]))
             return elements
 
-        rows = [["ID", "Class ID", "Object", "Confidence"]]
-        for obj in objects:
+        rows = [["#", "ID", "Class ID", "Object", "Confidence"]]
+        for index, obj in enumerate(objects, start=1):
             rows.append([
-                str(obj.id), str(obj.obj_class_id), obj.obj_name,
+                str(index), str(obj.id), str(obj.obj_class_id), obj.obj_name,
                 f"{obj.confidence * 100:.2f}%",
             ])
 
         table = Table(
-            rows, repeatRows=1, colWidths=[60 * mm, 20 * mm, 30 * mm, 30 * mm],
+            rows, repeatRows=1, colWidths=[10 * mm, 60 * mm, 18 * mm, 35 * mm, 25 * mm],
         )
         table.setStyle(self._get_table_style())
         elements.append(table)
         return elements
-
-    # Optional image annotation helper (requires full DetectedObject records)
-
-    def _create_annotated_image(
-            self,
-            detection,
-            objects: list[DetectedObject],
-    ) -> tuple[BytesIO, int, int]:
-        response = httpx.get(
-            detection.image_url,
-            timeout=30.0,
-        )
-        response.raise_for_status()
-
-        with PILImage.open(BytesIO(response.content)) as source:
-            image = source.convert("RGB")
-
-        width, height = image.size
-        draw = ImageDraw.Draw(image)
-        line_width = max(2, round(min(width, height) / 250))
-
-        area = (
-            detection.area_x1,
-            detection.area_y1,
-            detection.area_x2,
-            detection.area_y2,
-        )
-
-        # A área está normalizada entre 0 e 1.
-        if all(value is not None for value in area):
-            x1, y1, x2, y2 = area
-
-            draw.rectangle(
-                (
-                    int(x1 * width),
-                    int(y1 * height),
-                    int(x2 * width),
-                    int(y2 * height),
-                ),
-                outline="blue",
-                width=line_width,
-            )
-
-        # As bounding boxes estão em píxeis da imagem original.
-        for obj in objects:
-            bbox = (
-                obj.bbox_x1,
-                obj.bbox_y1,
-                obj.bbox_x2,
-                obj.bbox_y2,
-            )
-
-            draw.rectangle(
-                bbox,
-                outline="red",
-                width=line_width,
-            )
-
-            draw.text(
-                (bbox[0], max(0, bbox[1] - 15)),
-                f"{obj.object_name} {obj.confidence:.0%}",
-                fill="red",
-            )
-
-        output = BytesIO()
-        image.save(output, format="PNG")
-        output.seek(0)
-
-        return output, width, height
