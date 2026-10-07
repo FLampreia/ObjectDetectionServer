@@ -12,6 +12,7 @@ from fastapi import status
 from app.core.deps import get_detect_service, parse_area
 from app.core.token import get_current_user
 from app.db.schema import DetectionType
+from app.exceptions.custom_exceptions import FailedUploadingToCloud
 from app.models.detect import DownloadModelRequest, FrameProcessingResponse, VideoProcessingResponse, Area
 from app.services.processor_service import DetectService
 from fastapi import HTTPException
@@ -44,10 +45,7 @@ async def detect_image(
         uploaded = await upload_image(image)
     except Exception:
         logger.error("Failed uploading image to Cloudinary.")
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="It was not possible to save the image on Cloudinary.",
-        )
+        raise FailedUploadingToCloud()
 
     logging.info("Sending it to detection...")
 

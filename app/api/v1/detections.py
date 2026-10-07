@@ -110,3 +110,15 @@ def generate_detection_report(
         dot_label_enable=dot_label_enable,
 
     )
+
+@detections_router.delete("/detections/{detection_id}")
+async def delete_detection(
+        detection_id: uuid.UUID,
+        service: DetectionService = Depends(get_detections_service),
+        current_user=Depends(get_current_user)
+):
+    logger.info(
+        f"Deleting detection {detection_id} "
+    )
+
+    return await service.delete_detection(current_user, detection_id)

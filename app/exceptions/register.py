@@ -27,6 +27,9 @@ EXCEPTION_STATUS_MAP = {
     NotAllowedToDelete: status.HTTP_403_FORBIDDEN,
     TeamNameAlreadyExists: status.HTTP_409_CONFLICT,
     TeamNotFound: status.HTTP_404_NOT_FOUND,
+    DetectionNotFound: status.HTTP_404_NOT_FOUND,
+    FailedDeletingFromCloud: status.HTTP_500_INTERNAL_SERVER_ERROR,
+    FailedUploadingToCloud: status.HTTP_500_INTERNAL_SERVER_ERROR,
 }
 
 

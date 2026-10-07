@@ -5,8 +5,10 @@ from sqlalchemy import select, func, Row
 from sqlalchemy.orm import Session
 
 from app.db.schema import DetectedObject, User, Detection
+from app.exceptions.custom_exceptions import DetectionNotFound, FailedDeletingFromCloud, NotAllowedToDelete
 from app.models.detect import ListObjects, ListDetections, Area
 from app.models.stats import ModelsUsage, DetectionTypeUsage, TopObject, Stats
+from app.services.cloudinary_service import delete_image
 from app.services.user_service import UserService
 
 
@@ -28,6 +30,32 @@ class DetectionService:
         )
 
         return self._db.scalar(stmt)
+
+    async def delete_detection(
+            self,
+            current_user: User,
+            detection_id: uuid.UUID,
+    ):
+        # Check if detection exists
+        detection = self.get_detection(detection_id)
+        if not detection:
+            raise DetectionNotFound()
+
+        # Check if user is the owner of the detection
+        if detection.user_id != current_user.id:
+            raise NotAllowedToDelete()
+
+        # Delete image from cloudinary
+        try:
+            await delete_image(detection.image_public_id)
+        except Exception:
+            raise FailedDeletingFromCloud()
+
+        # Delete detection from database
+        self._db.delete(detection)
+        self._db.commit()
+
+        return True
 
     def get_all_detection_from_logged_user(
             self,

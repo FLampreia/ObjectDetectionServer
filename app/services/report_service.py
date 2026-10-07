@@ -279,7 +279,7 @@ class ReportService:
             detection.area_x2, detection.area_y2,
         )
         if any(value is None for value in coordinates):
-            return "Undefined"
+            return "Full Frame"
 
         area_style = ParagraphStyle(
             "AreaInfo",

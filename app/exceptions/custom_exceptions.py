@@ -110,6 +110,22 @@ class TeamNameAlreadyExists(AppException):
     def __init__(self):
         super().__init__("Team name already exists")
 
+
 class TeamNotFound(AppException):
     def __init__(self):
         super().__init__("Team not found")
+
+
+class DetectionNotFound(AppException):
+    def __init__(self):
+        super().__init__("Detection not found")
+
+
+class FailedUploadingToCloud(AppException):
+    def __init__(self):
+        super().__init__("It was not possible to upload the file to the cloud.")
+
+
+class FailedDeletingFromCloud(AppException):
+    def __init__(self):
+        super().__init__("It was not possible to delete the file from the cloud.")

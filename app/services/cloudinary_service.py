@@ -30,3 +30,7 @@ async def upload_image(image: UploadFile) -> dict:
         )
     finally:
         await image.seek(0)
+
+async def delete_image(public_id: str):
+
+        return await run_in_threadpool(cloudinary.uploader.destroy, public_id)
