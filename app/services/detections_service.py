@@ -34,25 +34,42 @@ class DetectionService:
     async def delete_detection(
             self,
             current_user: User,
-            detection_id: uuid.UUID,
+            detection_ids: list[uuid.UUID],
     ):
-        # Check if detection exists
-        detection = self.get_detection(detection_id)
-        if not detection:
+        # Remove duplicate UUIDs
+        detection_ids = list(set(detection_ids))
+
+        # Get all requested detections
+        statement = select(Detection).where(
+            Detection.id.in_(detection_ids),
+        )
+
+        detections = self._db.scalars(statement).all()
+
+        # Check if all detections exist
+        if len(detections) != len(detection_ids):
             raise DetectionNotFound()
 
-        # Check if user is the owner of the detection
-        if detection.user_id != current_user.id:
+        # Check if user owns all detections
+        if any(
+                detection.user_id != current_user.id
+                for detection in detections
+        ):
             raise NotAllowedToDelete()
 
-        # Delete image from cloudinary
-        try:
-            await delete_image(detection.image_public_id)
-        except Exception:
-            raise FailedDeletingFromCloud()
 
-        # Delete detection from database
-        self._db.delete(detection)
+        for detection in detections:
+
+            # Delete images from Cloudinary
+            if detection.image_public_id:
+                try:
+                    await delete_image(detection.image_public_id)
+                except Exception:
+                    raise FailedDeletingFromCloud()
+
+            # Delete detections from database
+            self._db.delete(detection)
+
         self._db.commit()
 
         return True
@@ -282,10 +299,10 @@ class DetectionService:
         )
 
     def get_detections_for_interval(
-        self,
-        user_id: uuid.UUID,
-        start_date: date,
-        end_date: date,
+            self,
+            user_id: uuid.UUID,
+            start_date: date,
+            end_date: date,
     ) -> list[ListDetections]:
         start_datetime = datetime.combine(
             start_date,

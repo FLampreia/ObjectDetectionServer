@@ -111,14 +111,14 @@ def generate_detection_report(
 
     )
 
-@detections_router.delete("/detections/{detection_id}")
+@detections_router.delete("/detections")
 async def delete_detection(
-        detection_id: uuid.UUID,
+        detections: list[uuid.UUID],
         service: DetectionService = Depends(get_detections_service),
         current_user=Depends(get_current_user)
 ):
     logger.info(
-        f"Deleting detection {detection_id} "
+        f"Deleting {len(detections)} detections"
     )
 
-    return await service.delete_detection(current_user, detection_id)
+    return await service.delete_detection(current_user, detections)
