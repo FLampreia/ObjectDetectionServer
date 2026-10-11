@@ -9,6 +9,7 @@ from app.core.deps import get_detections_service, get_report_service
 from app.core.token import get_current_user
 from app.services.detections_service import DetectionService
 from app.services.report_service import ReportService
+from app.db.schema import DetectionType
 
 detections_router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -51,6 +52,10 @@ def get_detections_stats(
 def generate_report_interval(
         start_date: date = Query(...),
         end_date: date = Query(...),
+        model: str | None = Query(None),
+        detection_type: DetectionType | None = Query(None),
+        team_id: uuid.UUID | None = Query(None),
+        unassigned: bool = Query(False),
         service: ReportService = Depends(get_report_service),
         current_user=Depends(get_current_user),
 ):
@@ -71,6 +76,10 @@ def generate_report_interval(
         user_id=current_user.id,
         start_date=start_date,
         end_date=end_date,
+        model=model,
+        detection_type=detection_type,
+        team_id=team_id,
+        unassigned=unassigned,
     )
 
 

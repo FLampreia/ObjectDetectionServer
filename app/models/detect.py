@@ -41,6 +41,8 @@ class ListDetections(BaseModel):
     processing_time_ms: float
     count: int
     type: DetectionType
+    team_id: uuid.UUID | None = None
+    team_name: str | None = None
 
 
 class ListObjects(BaseModel):

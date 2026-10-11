@@ -2,6 +2,7 @@ import uuid
 from datetime import date, datetime, time
 from io import BytesIO
 from typing import List
+from xml.sax.saxutils import escape
 
 import httpx
 from fastapi.responses import Response
@@ -14,6 +15,7 @@ from reportlab.platypus import (
     Flowable,
     Image as PDFImage,
     Paragraph,
+    KeepTogether,
     SimpleDocTemplate,
     Spacer,
     Table,
@@ -23,7 +25,7 @@ from sqlalchemy import select, func
 from sqlalchemy.engine import Row
 from sqlalchemy.orm import Session
 
-from app.db.schema import DetectedObject, Detection
+from app.db.schema import DetectedObject, Detection, DetectionType
 from app.models.detect import ListObjects, ListDetections, Area
 from app.services.detections_service import DetectionService
 
@@ -44,9 +46,22 @@ class ReportService:
             user_id: uuid.UUID,
             start_date: date,
             end_date: date,
+            model: str | None = None,
+            detection_type: DetectionType | None = None,
+            team_id: uuid.UUID | None = None,
+            unassigned: bool = False,
     ) -> Response:
 
-        detections = self._detection_service.get_detections_for_interval(user_id, start_date, end_date)
+        # Fetch only the detections matching the requested period and filters.
+        detections = self._detection_service.get_detections_for_interval(
+            user_id,
+            start_date,
+            end_date,
+            model=model,
+            detection_type=detection_type,
+            team_id=team_id,
+            unassigned=unassigned,
+        )
 
         pdf = self._create_interval_pdf(detections, start_date, end_date)
 
@@ -75,6 +90,7 @@ class ReportService:
 
         objects = self._detection_service.get_objects_from_detection(detection_id)
 
+        # Render the report using the selected image annotation options.
         pdf = self._create_detection_pdf(
             detection,
             objects,
@@ -92,6 +108,7 @@ class ReportService:
         return self._create_pdf_response(pdf, f"detection-report-{detection_id}.pdf")
 
     # Shared PDF configuration
+
     def _create_pdf_response(self, pdf: bytes, filename: str) -> Response:
         return Response(
             content=pdf,
@@ -105,8 +122,10 @@ class ReportService:
             pagesize=A4,
             rightMargin=15 * mm,
             leftMargin=15 * mm,
-            topMargin=15 * mm,
-            bottomMargin=15 * mm,
+            topMargin=20 * mm,
+            bottomMargin=20 * mm,
+            title="Individual detection report",
+            author="ObjectDetection",
         )
 
     def _create_header(
@@ -116,36 +135,139 @@ class ReportService:
             spacing: float,
     ) -> list[Flowable]:
         return [
-            Paragraph("ObjectDetection", styles["Title"]),
-            Paragraph(title, styles["Heading2"]),
+            Paragraph(
+                "OBJECTDETECTION",
+                ParagraphStyle(
+                    "ReportBrand",
+                    fontName="Helvetica-Bold",
+                    fontSize=10,
+                    leading=14,
+                    textColor=colors.HexColor("#475467"),
+                ),
+            ),
+            Paragraph(title, styles["Title"]),
             Spacer(1, spacing),
         ]
 
+    def _report_styles(self) -> StyleSheet1:
+        styles = getSampleStyleSheet()
+
+        # Use a clear hierarchy for the report title, section headings and body.
+        styles["Title"].fontName = "Helvetica-Bold"
+        styles["Title"].fontSize = 22
+        styles["Title"].leading = 28
+        styles["Title"].alignment = 0
+        styles["Title"].spaceBefore = 6
+        styles["Title"].textColor = colors.HexColor("#182230")
+
+        styles["Heading2"].fontSize = 12
+        styles["Heading2"].leading = 16
+        styles["Heading2"].textColor = colors.HexColor("#182230")
+
+        styles["Normal"].fontSize = 9
+        styles["Normal"].leading = 13
+        styles["Normal"].textColor = colors.HexColor("#475467")
+
+        return styles
+
+    def _draw_report_page(self, canvas, doc, subtitle: str):
+        canvas.saveState()
+
+        # Align page decorations with the padded content frame.
+        left, right = doc.leftMargin + 6, A4[0] - doc.rightMargin - 6
+
+        # Draw the footer separator, report context and page number.
+        canvas.setStrokeColor(colors.HexColor("#D0D5DD"))
+        canvas.setLineWidth(0.5)
+        canvas.line(left, 16 * mm, right, 16 * mm)
+        canvas.setFont("Helvetica", 8)
+        canvas.setFillColor(colors.HexColor("#475467"))
+        canvas.drawString(left, 11 * mm, f"ObjectDetection | {subtitle}")
+        canvas.drawRightString(right, 11 * mm, f"Page {doc.page}")
+
+        # Repeat a compact header on continuation pages.
+        if doc.page > 1:
+            canvas.setFont("Helvetica-Bold", 9)
+            canvas.drawString(left, A4[1] - 12 * mm, "Detection report")
+            canvas.setFont("Helvetica", 8)
+            canvas.drawRightString(right, A4[1] - 12 * mm, subtitle)
+
+        canvas.restoreState()
+
+    def _styled_report_table(self, rows, ratios, width, numeric_columns=()) -> Table:
+        cell = ParagraphStyle(
+            "ReportCell",
+            fontName="Helvetica",
+            fontSize=8.5,
+            leading=12,
+            textColor=colors.HexColor("#344054"),
+            splitLongWords=True,
+        )
+
+        header = ParagraphStyle(
+            "ReportTableHeader",
+            parent=cell,
+            fontName="Helvetica-Bold",
+            fontSize=8,
+            leading=11,
+            textColor=colors.white,
+        )
+
+        # Escape user text before ReportLab interprets paragraph markup.
+        cells = [
+            [
+                Paragraph(escape(str(value)), header if index == 0 else cell)
+                for value in row
+            ]
+            for index, row in enumerate(rows)
+        ]
+
+        # Keep column proportions consistent and repeat headers after page breaks.
+        table = Table(
+            cells,
+            repeatRows=1,
+            colWidths=[width * ratio / sum(ratios) for ratio in ratios],
+            hAlign="LEFT",
+        )
+
+        commands = list(self._get_table_style().getCommands())
+
+        # Paragraph alignment controls numeric cells independently of table placement.
+        for column in numeric_columns:
+            for row in cells[1:]:
+                row[column].style = ParagraphStyle("ReportNumeric", parent=cell, alignment=2)
+
+        table.setStyle(TableStyle(commands))
+
+        return table
+
     def _get_table_style(self) -> TableStyle:
         return TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#eeeeee")),
-            ("TEXTCOLOR", (0, 0), (-1, 0), colors.black),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#344054")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F9FAFB")]),
             ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
             ("FONTSIZE", (0, 0), (-1, -1), 8),
-            ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
-            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("LINEBELOW", (0, 1), (-1, -1), 0.4, colors.HexColor("#EAECF0")),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
             ("LEFTPADDING", (0, 0), (-1, -1), 5),
             ("RIGHTPADDING", (0, 0), (-1, -1), 5),
-            ("TOPPADDING", (0, 0), (-1, -1), 5),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ("TOPPADDING", (0, 0), (-1, -1), 8),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
         ])
 
     def _get_information_table_style(self) -> TableStyle:
         return TableStyle([
-            ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#eeeeee")),
+            ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#F2F4F7")),
+            ("TEXTCOLOR", (0, 0), (-1, -1), colors.HexColor("#344054")),
             ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
             ("FONTSIZE", (0, 0), (-1, -1), 9),
-            ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+            ("LINEBELOW", (0, 0), (-1, -1), 0.4, colors.HexColor("#EAECF0")),
             ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
             ("LEFTPADDING", (0, 0), (-1, -1), 6),
             ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-            ("TOPPADDING", (0, 0), (-1, -1), 6),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+            ("TOPPADDING", (0, 0), (-1, -1), 5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
         ])
 
     # Report for a date interval
@@ -157,21 +279,107 @@ class ReportService:
             end_date: date,
     ) -> bytes:
         buffer = BytesIO()
-        document = self._create_document(buffer)
+
+        # Reserve space above and below the content for page decorations.
+        document = SimpleDocTemplate(
+            buffer,
+            pagesize=A4,
+            leftMargin=15 * mm,
+            rightMargin=15 * mm,
+            topMargin=20 * mm,
+            bottomMargin=20 * mm,
+            title="Detection report by date interval",
+            author="ObjectDetection",
+        )
+
+        width = document.width - 12  # Account for the document frame's padding.
+
+        # Define the interval report's typography and color palette.
+        ink = colors.HexColor("#182230")
+        muted = colors.HexColor("#475467")
         styles = getSampleStyleSheet()
 
-        elements = self._create_header("Detection Report", styles, spacing=8)
-        elements.extend([
-            Paragraph(
-                f"<b>Period:</b> {start_date:%d/%m/%Y} - {end_date:%d/%m/%Y}",
-                styles["Normal"],
-            ),
-            Paragraph(f"<b>Total detections:</b> {len(detections)}", styles["Normal"]),
-            Spacer(1, 15),
-            self._create_interval_table(detections),
-        ])
+        brand = ParagraphStyle(
+            "IntervalBrand",
+            fontName="Helvetica-Bold",
+            fontSize=10,
+            leading=14,
+            textColor=muted,
+        )
 
-        document.build(elements)
+        title = ParagraphStyle(
+            "IntervalTitle",
+            fontName="Helvetica-Bold",
+            fontSize=22,
+            leading=28,
+            textColor=ink,
+            spaceBefore=6,
+            spaceAfter=8,
+        )
+
+        body = ParagraphStyle(
+            "IntervalBody",
+            fontName="Helvetica",
+            fontSize=10,
+            leading=15,
+            textColor=muted,
+        )
+
+        metric = ParagraphStyle(
+            "IntervalMetric",
+            parent=body,
+            fontSize=9,
+            leading=18,
+        )
+
+        heading = ParagraphStyle(
+            "IntervalHeading",
+            parent=styles["Heading2"],
+            textColor=ink,
+            fontSize=12,
+            leading=16,
+            spaceAfter=8,
+        )
+
+        # Start with the report identity and the selected date range.
+        period = f"{start_date:%d/%m/%Y} - {end_date:%d/%m/%Y}"
+
+        elements = [
+            Paragraph("OBJECTDETECTION", brand),
+            Paragraph("Detection report", title),
+            Paragraph(f"Period: {period}", body),
+            Spacer(1, 16),
+        ]
+        # Summarize the filtered results before listing individual detections.
+        total_objects = sum(detection.count for detection in detections)
+
+        summary = Table([[
+            Paragraph(f"Detections<br/><font size='16' color='#182230'><b>{len(detections):,}</b></font>", metric),
+            Paragraph(f"Objects detected<br/><font size='16' color='#182230'><b>{total_objects:,}</b></font>", metric),
+        ]], colWidths=[width / 2] * 2, hAlign="LEFT")
+
+        summary.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F2F4F7")),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 12),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 12),
+            ("TOPPADDING", (0, 0), (-1, -1), 10),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+        ]))
+
+        elements.extend([summary, Spacer(1, 20), Paragraph("Detections in this period", heading)])
+
+        # An empty result still produces a useful report with a clear message.
+        if detections:
+            elements.append(self._create_interval_table(detections, width=width))
+        else:
+            elements.append(Paragraph("No detections match this period and the selected filters.", body))
+
+        def draw_page(canvas, doc):
+            self._draw_report_page(canvas, doc, period)
+
+        document.build(elements, onFirstPage=draw_page, onLaterPages=draw_page)
+
         return buffer.getvalue()
 
     def _format_processing_time(self, ms: float) -> str:
@@ -182,26 +390,72 @@ class ReportService:
         else:
             return f"{ms / 60000:.2f} min"
 
-    def _create_interval_table(self, detections: list[ListDetections]) -> Table:
-        rows = [[
-            "Date", "Model", "Threshold Set", "Processing Time", "Nº Objects", "Type",
-        ]]
+    def _create_interval_table(
+            self,
+            detections: list[ListDetections],
+            width: float = 176 * mm,
+    ) -> Table:
+        # Allow long model names to wrap instead of overflowing their column.
+        cell_style = ParagraphStyle(
+            "IntervalCell",
+            fontName="Helvetica",
+            fontSize=8.5,
+            leading=12,
+            textColor=colors.HexColor("#344054"),
+            splitLongWords=True,
+        )
+
+        header_style = ParagraphStyle(
+            "IntervalTableHeader",
+            parent=cell_style,
+            fontName="Helvetica-Bold",
+            fontSize=8,
+            leading=11,
+            textColor=colors.white,
+        )
+
+        rows = [[Paragraph(label, header_style) for label in (
+            "Date",
+            "Model",
+            "Threshold",
+            "Processing<br/>time",
+            "Objects",
+            "Type",
+        )]]
+
+        # Keep dates compact and format numeric values for quick comparison.
         for detection in detections:
             rows.append([
-                detection.created_at.strftime("%d/%m/%Y %H:%M"),
-                detection.model,
+                Paragraph(detection.created_at.strftime("%d/%m/%Y<br/>%H:%M"), cell_style),
+                Paragraph(escape(detection.model), cell_style),
                 f"{detection.conf_threshold * 100:.0f}%",
                 f"{self._format_processing_time(detection.processing_time_ms)}",
                 str(detection.count),
-                detection.type.value,
+                Paragraph(escape(detection.type.value.title()), cell_style),
             ])
 
         table = Table(
             rows,
             repeatRows=1,
-            colWidths=[32 * mm, 25 * mm, 27 * mm, 28 * mm, 20 * mm, 20 * mm],
+            colWidths=[width * ratio / 176 for ratio in (30, 60, 22, 25, 20, 19)],
+            hAlign="LEFT",
         )
-        table.setStyle(self._get_table_style())
+        table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#344054")),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F9FAFB")]),
+            ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
+            ("FONTSIZE", (0, 1), (-1, -1), 8.5),
+            ("TEXTCOLOR", (0, 1), (-1, -1), colors.HexColor("#344054")),
+            ("LINEBELOW", (0, 0), (-1, 0), 0.5, colors.HexColor("#344054")),
+            ("LINEBELOW", (0, 1), (-1, -1), 0.4, colors.HexColor("#EAECF0")),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("ALIGN", (2, 1), (4, -1), "RIGHT"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 7),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 7),
+            ("TOPPADDING", (0, 0), (-1, -1), 8),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+        ]))
+
         return table
 
     # Report for a single detection
@@ -225,19 +479,29 @@ class ReportService:
     ) -> bytes:
         buffer = BytesIO()
         document = self._create_document(buffer)
-        styles = getSampleStyleSheet()
+        styles = self._report_styles()
+        width = document.width - 12
 
+        # Present the report title separately from the full detection identifier.
         elements = self._create_header(
-            f"Detection Report #{detection.id}", styles, spacing=10,
+            "Detection report",
+            styles,
+            spacing=0,
         )
 
+        elements.extend([
+            Paragraph(f"Detection ID: {detection.id}", styles["Normal"]),
+            Spacer(1, 16),
+        ])
+
+        # Show detection metadata before the annotated image.
         elements.append(self._create_information_table(detection, objects, styles))
         elements.append(Spacer(1, 20))
 
         elements.extend(self._create_image_section(
             detection,
             objects,
-            document.width,
+            width,
             styles,
             area_color=area_color,
             bbox_color=bbox_color,
@@ -250,11 +514,17 @@ class ReportService:
             dot_label_enable=dot_label_enable,
         ))
 
+        # Follow the image with class totals and the complete object list.
         if objects:
-            elements.extend(self._create_class_summary_section(objects, styles))
-        elements.extend(self._create_objects_section(objects, styles))
+            elements.extend(self._create_class_summary_section(objects, styles, width))
 
-        document.build(elements)
+        elements.extend(self._create_objects_section(objects, styles, width))
+
+        def draw_page(canvas, doc):
+            self._draw_report_page(canvas, doc, detection.created_at.strftime("%d/%m/%Y %H:%M"))
+
+        document.build(elements, onFirstPage=draw_page, onLaterPages=draw_page)
+
         return buffer.getvalue()
 
     def _calculate_object_statistics(self, objects: list[ListObjects]) -> dict[str, float]:
@@ -262,6 +532,7 @@ class ReportService:
             return {"average": 0, "highest": 0, "lowest": 0, "unique_classes": 0}
 
         confidences = [obj.confidence for obj in objects]
+
         return {
             "average": sum(confidences) / len(confidences),
             "highest": max(confidences),
@@ -275,9 +546,13 @@ class ReportService:
             styles: StyleSheet1,
     ) -> Paragraph | str:
         coordinates = (
-            detection.area_x1, detection.area_y1,
-            detection.area_x2, detection.area_y2,
+            detection.area_x1,
+            detection.area_y1,
+            detection.area_x2,
+            detection.area_y2,
         )
+
+        # Missing area coordinates mean the full image was processed.
         if any(value is None for value in coordinates):
             return "Full Frame"
 
@@ -289,6 +564,7 @@ class ReportService:
             spaceBefore=0,
             spaceAfter=0,
         )
+
         return Paragraph(
             f"<b>Start Point:</b> "
             f"x = {detection.area_x1:g}, y = {detection.area_y1:g}<br/>"
@@ -304,11 +580,13 @@ class ReportService:
             styles: StyleSheet1,
     ) -> Table:
         statistics = self._calculate_object_statistics(objects)
+
         detection_type = (
             detection.type.value
             if hasattr(detection.type, "value")
             else str(detection.type)
         )
+
         rows = [
             ["Date", detection.created_at.strftime("%d/%m/%Y %H:%M")],
             ["Model", detection.model],
@@ -322,8 +600,28 @@ class ReportService:
             ["Lowest Confidence", f"{statistics['lowest'] * 100:.2f}%"],
             ["Area", self._create_area_content(detection, styles)],
         ]
-        table = Table(rows, colWidths=[45 * mm, 120 * mm])
+        label_style = ParagraphStyle(
+            "InformationLabel",
+            parent=styles["Normal"],
+            fontName="Helvetica-Bold",
+        )
+
+        # Preserve formatted area content while escaping plain metadata values.
+        rows = [
+            [
+                Paragraph(escape(label), label_style),
+                value
+                if isinstance(value, Paragraph)
+                else Paragraph(escape(value), styles["Normal"]),
+            ]
+            for label, value in rows
+        ]
+
+        width = A4[0] - 30 * mm - 12
+
+        table = Table(rows, colWidths=[width * 0.29, width * 0.71], hAlign="LEFT")
         table.setStyle(self._get_information_table_style())
+
         return table
 
     def _create_image_section(
@@ -347,7 +645,6 @@ class ReportService:
     ) -> list[Flowable]:
         return [
             Paragraph("Processed Result", styles["Heading2"]),
-            Spacer(1, 8),
             self._create_pdf_image(
                 detection.image_url,
                 max_width,
@@ -358,6 +655,7 @@ class ReportService:
                     detection.area_y2
                 ],
                 objects=objects,
+                max_height=75 * mm,
                 area_color=area_color,
                 bbox_color=bbox_color,
                 dot_color=dot_color,
@@ -393,6 +691,7 @@ class ReportService:
 
     ) -> PDFImage:
 
+        # Download the source image before applying the requested annotations.
         response = httpx.get(image_url, timeout=30.0)
         response.raise_for_status()
 
@@ -402,10 +701,8 @@ class ReportService:
         width, height = source.size
         draw = ImageDraw.Draw(annotated_image)
         line_width = max(2, round(min(width, height) / 250))
-
-
         if all(value is not None for value in area):
-            # Area coordinates are normalized between 0 and 1.
+            # Outline the configured detection area.
             draw.rectangle(
                 area,
                 outline=area_color,
@@ -414,20 +711,20 @@ class ReportService:
 
         for index, obj in enumerate(objects, start=1):
 
-            # Label
+            # Match object labels to the numbered rows in the details table.
             label = f"{index} - {obj.confidence:.0%}"
 
-            # Center of the object
+            # Calculate the object center for optional dot annotations.
             x_center = (obj.bbox.x1 + obj.bbox.x2) / 2
             y_center = (obj.bbox.y1 + obj.bbox.y2) / 2
 
-            # Position of the text
+            # Place labels near the selected marker and keep them below the top edge.
             text_position = (
                 (x_center if dot_label_enable else obj.bbox.x1) + 3,
                 max(0, ((y_center - 12) if dot_label_enable else obj.bbox.y1) - 3),
             )
 
-            # Draw bounding box
+            # Draw the bounding box when enabled.
             if bbox_enable:
                 bbox = (
                     obj.bbox.x1,
@@ -442,7 +739,7 @@ class ReportService:
                     width=line_width,
                 )
 
-            # Draw a dot at the center of the object
+            # Draw an optional dot at the object center.
             if dot_enable:
 
                 draw.ellipse(
@@ -457,14 +754,14 @@ class ReportService:
 
             if dot_label_enable or bbox_label_enable:
 
-                # Area occupied by text
+                # Measure the label before drawing its background.
                 label_bbox = draw.textbbox(
                     text_position,
                     label,
                     anchor="ms" if dot_label_enable else "ls",
                 )
 
-                # Drawing background
+                # Add padding around the label for contrast against the image.
                 padding = 3
                 draw.rectangle(
                     (
@@ -476,7 +773,7 @@ class ReportService:
                     fill=text_background_color,
                 )
 
-                # Drawing text above
+                # Draw the label over its background.
                 draw.text(
                     text_position,
                     label,
@@ -484,6 +781,7 @@ class ReportService:
                     anchor="ms" if dot_label_enable else "ls",
                 )
 
+        # Scale the annotated image to fit while preserving its aspect ratio.
         image_buffer = BytesIO()
         annotated_image.save(image_buffer, format="PNG")
 
@@ -497,6 +795,8 @@ class ReportService:
 
     def _summarize_objects_by_class(self, objects: list[ListObjects]) -> dict:
         summary = {}
+
+        # Aggregate object counts and confidence totals by class identifier.
         for obj in objects:
             if obj.obj_class_id not in summary:
                 summary[obj.obj_class_id] = {
@@ -504,30 +804,34 @@ class ReportService:
                     "count": 0,
                     "confidence_sum": 0,
                 }
+
             summary[obj.obj_class_id]["count"] += 1
             summary[obj.obj_class_id]["confidence_sum"] += obj.confidence
+
         return summary
 
     def _create_class_summary_section(
             self,
             objects: list[ListObjects],
             styles: StyleSheet1,
+            width: float = 176 * mm,
     ) -> list[Flowable]:
         rows = [["Class ID", "Class", "Objects", "Avg. Confidence"]]
+
         for class_id, data in self._summarize_objects_by_class(objects).items():
             average = data["confidence_sum"] / data["count"]
             rows.append([
-                str(class_id), data["name"], str(data["count"]), f"{average * 100:.2f}%",
+                str(class_id),
+                data["name"],
+                str(data["count"]),
+                f"{average * 100:.2f}%",
             ])
 
-        table = Table(
-            rows, repeatRows=1, colWidths=[25 * mm, 50 * mm, 30 * mm, 40 * mm],
-        )
-        table.setStyle(self._get_table_style())
+        table = self._styled_report_table(rows, (25, 70, 30, 40), width, (0, 2, 3))
+
+        # Keep the class summary heading with its table whenever it fits on a page.
         return [
-            Paragraph("Summary by Class", styles["Heading2"]),
-            Spacer(1, 8),
-            table,
+            KeepTogether([Paragraph("Summary by Class", styles["Heading2"]), table]),
             Spacer(1, 20),
         ]
 
@@ -535,25 +839,29 @@ class ReportService:
             self,
             objects: list[ListObjects],
             styles: StyleSheet1,
+            width: float = 176 * mm,
     ) -> list[Flowable]:
         elements = [
             Paragraph("Detected Objects", styles["Heading2"]),
-            Spacer(1, 8),
         ]
+
         if not objects:
             elements.append(Paragraph("No objects were detected.", styles["Normal"]))
             return elements
 
         rows = [["#", "ID", "Class ID", "Object", "Confidence"]]
+
+        # Preserve the annotation numbering and full object identifiers.
         for index, obj in enumerate(objects, start=1):
             rows.append([
-                str(index), str(obj.id), str(obj.obj_class_id), obj.obj_name,
+                str(index),
+                str(obj.id),
+                str(obj.obj_class_id),
+                obj.obj_name,
                 f"{obj.confidence * 100:.2f}%",
             ])
 
-        table = Table(
-            rows, repeatRows=1, colWidths=[10 * mm, 60 * mm, 18 * mm, 35 * mm, 25 * mm],
-        )
-        table.setStyle(self._get_table_style())
+        table = self._styled_report_table(rows, (10, 65, 20, 55, 26), width, (0, 2, 4))
         elements.append(table)
+
         return elements

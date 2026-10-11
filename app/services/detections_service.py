@@ -4,7 +4,7 @@ from typing import List
 from sqlalchemy import select, func, Row
 from sqlalchemy.orm import Session
 
-from app.db.schema import DetectedObject, User, Detection
+from app.db.schema import DetectedObject, User, Detection, DetectionType, Team
 from app.exceptions.custom_exceptions import DetectionNotFound, FailedDeletingFromCloud, NotAllowedToDelete
 from app.models.detect import ListObjects, ListDetections, Area
 from app.models.stats import ModelsUsage, DetectionTypeUsage, TopObject, Stats
@@ -86,6 +86,8 @@ class DetectionService:
                 Detection.conf_threshold,
                 Detection.processing_time_ms,
                 Detection.type,
+                Detection.team_id,
+                Team.name.label("team_name"),
                 func.count(DetectedObject.id).label("count_objects"),
             )
             .outerjoin(
@@ -93,6 +95,7 @@ class DetectionService:
                 DetectedObject.detection_id == Detection.id
             )
             .where(Detection.user_id == current_user.id)
+            .outerjoin(Team, Team.id == Detection.team_id)
             .group_by(
                 Detection.id,
                 Detection.created_at,
@@ -100,6 +103,8 @@ class DetectionService:
                 Detection.conf_threshold,
                 Detection.processing_time_ms,
                 Detection.type,
+                Detection.team_id,
+                Team.name,
             )
             .order_by(Detection.created_at.desc())
         )
@@ -116,6 +121,8 @@ class DetectionService:
                 processing_time_ms=r.processing_time_ms,
                 count=r.count_objects,
                 type=r.type,
+                team_id=r.team_id,
+                team_name=r.team_name,
             )
             for r in result
         ]
@@ -303,6 +310,10 @@ class DetectionService:
             user_id: uuid.UUID,
             start_date: date,
             end_date: date,
+            model: str | None = None,
+            detection_type: DetectionType | None = None,
+            team_id: uuid.UUID | None = None,
+            unassigned: bool = False,
     ) -> list[ListDetections]:
         start_datetime = datetime.combine(
             start_date,
@@ -317,6 +328,7 @@ class DetectionService:
         stmt = (
             select(
                 Detection.id,
+                User.username,
                 Detection.created_at,
                 Detection.model,
                 Detection.conf_threshold,
@@ -328,6 +340,7 @@ class DetectionService:
                 DetectedObject,
                 DetectedObject.detection_id == Detection.id
             )
+            .join(User, User.id == Detection.user_id)
             .where(
                 Detection.user_id == user_id,
                 Detection.created_at >= start_datetime,
@@ -335,6 +348,7 @@ class DetectionService:
             )
             .group_by(
                 Detection.id,
+                User.username,
                 Detection.created_at,
                 Detection.model,
                 Detection.conf_threshold,
@@ -344,4 +358,25 @@ class DetectionService:
             .order_by(Detection.created_at.desc())
         )
 
-        return self._db.execute(stmt).all()
+        if model is not None:
+            stmt = stmt.where(Detection.model == model)
+        if detection_type is not None:
+            stmt = stmt.where(Detection.type == detection_type)
+        if team_id is not None:
+            stmt = stmt.where(Detection.team_id == team_id)
+        if unassigned:
+            stmt = stmt.where(Detection.team_id.is_(None))
+
+        return [
+            ListDetections(
+                id=row.id,
+                username=row.username,
+                created_at=row.created_at,
+                model=row.model,
+                conf_threshold=row.conf_threshold,
+                processing_time_ms=row.processing_time_ms,
+                count=row.count_objects,
+                type=row.type,
+            )
+            for row in self._db.execute(stmt).all()
+        ]
