@@ -15,6 +15,8 @@ from app.services.processor_service import DetectService
 from app.services.cloudinary_service import upload_frame_image, delete_image
 
 logger = logging.getLogger(__name__)
+MAX_PENDING_UPLOADS = 4
+UPLOAD_CONCURRENCY = 2
 
 
 @dataclass
@@ -31,6 +33,10 @@ class SocketContext:
     frames: list[StoredFrame] = field(default_factory=list)
     uploaded_ids: list[str] = field(default_factory=list)
     committed: bool = False
+    upload_tasks: set[asyncio.Task] = field(default_factory=set)
+    upload_slots: asyncio.Semaphore = field(default_factory=lambda: asyncio.Semaphore(UPLOAD_CONCURRENCY))
+    upload_failed: asyncio.Event = field(default_factory=asyncio.Event)
+    upload_error: Exception | None = None
 
     def new_objects(self, response, area=None):
         new = []
@@ -47,6 +53,52 @@ class SocketContext:
 
 
 class SocketService:
+    @staticmethod
+    def check_upload_error(context: SocketContext):
+        if context.upload_error is not None:
+            raise RuntimeError("Frame image upload failed") from context.upload_error
+
+    async def watch_upload_failure(self, context: SocketContext):
+        await context.upload_failed.wait()
+        self.check_upload_error(context)
+
+    async def upload_frame(self, pending: PendingFrame, new_objects, context: SocketContext):
+        async with context.upload_slots:
+            uploaded = await upload_frame_image(pending.content)
+            context.uploaded_ids.append(uploaded["public_id"])
+            context.frames.append(StoredFrame(
+                frame_number=pending.metadata.frame_number,
+                timestamp_ms=pending.metadata.timestamp_ms,
+                image_public_id=uploaded["public_id"], image_url=uploaded["secure_url"],
+                detections=new_objects,
+            ))
+
+    async def queue_upload(self, pending: PendingFrame, new_objects, context: SocketContext):
+        self.check_upload_error(context)
+        # Bound retained JPEGs; slow storage applies backpressure instead of growing memory.
+        while len(context.upload_tasks) >= MAX_PENDING_UPLOADS:
+            await asyncio.wait(context.upload_tasks, return_when=asyncio.FIRST_COMPLETED)
+            self.check_upload_error(context)
+        task = asyncio.create_task(self.upload_frame(pending, new_objects, context))
+        context.upload_tasks.add(task)
+
+        def completed(upload_task):
+            context.upload_tasks.discard(upload_task)
+            if upload_task.cancelled():
+                error = RuntimeError("Frame image upload was cancelled")
+            else:
+                error = upload_task.exception()
+            if error is not None and context.upload_error is None:
+                context.upload_error = error
+                context.upload_failed.set()
+
+        task.add_done_callback(completed)
+
+    async def wait_for_uploads(self, context: SocketContext):
+        if context.upload_tasks:
+            # Connection cancellation must not lose the IDs of successful uploads.
+            await asyncio.shield(asyncio.gather(*context.upload_tasks, return_exceptions=True))
+
     @staticmethod
     def validate_membership(db, user_id, parameters):
         if db.get(User, user_id) is None:
@@ -73,6 +125,7 @@ class SocketService:
             )
 
     async def cleanup(self, context: SocketContext):
+        await self.wait_for_uploads(context)
         if context.committed:
             return
         for public_id in context.uploaded_ids:
@@ -124,6 +177,9 @@ class SocketService:
             if payload.get("status") == "finished":
                 if context.pending is not None:
                     raise ValueError("Worker finished with an unanswered frame")
+                await self.wait_for_uploads(context)
+                self.check_upload_error(context)
+                context.frames.sort(key=lambda frame: frame.frame_number)
                 result = VideoProcessingResponse(
                     processing_time=processing_time,
                     detections_per_frame=[obj for frame in context.frames for obj in frame.detections],
@@ -149,21 +205,9 @@ class SocketService:
             context.pending = None
             processing_time += frame.processing_time_per_frame
             new_objects = context.new_objects(frame, parameters.area)
+            self.check_upload_error(context)
             if new_objects:
-                upload_task = asyncio.create_task(upload_frame_image(pending.content))
-                try:
-                    uploaded = await asyncio.shield(upload_task)
-                except asyncio.CancelledError:
-                    uploaded = await upload_task
-                    context.uploaded_ids.append(uploaded["public_id"])
-                    raise
-                context.uploaded_ids.append(uploaded["public_id"])
-                context.frames.append(StoredFrame(
-                    frame_number=pending.metadata.frame_number,
-                    timestamp_ms=pending.metadata.timestamp_ms,
-                    image_public_id=uploaded["public_id"], image_url=uploaded["secure_url"],
-                    detections=new_objects,
-                ))
+                await self.queue_upload(pending, new_objects, context)
             # Keep crop-relative coordinates for the existing frontend drawing.
             await frontend_ws.send_text(message)
         raise RuntimeError("Worker closed before confirming completion")

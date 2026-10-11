@@ -94,6 +94,7 @@ async def connect_socket(
             )
 
             tasks = [
+                asyncio.create_task(socket_service.watch_upload_failure(context)),
                 asyncio.create_task(
                     socket_service.forward_to_processor(websocket, processor_ws, context)
                 ),
