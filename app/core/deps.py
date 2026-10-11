@@ -8,6 +8,7 @@ from app.models.detect import Area
 from app.services.processor_service import DetectService
 from app.services.detections_service import DetectionService
 from app.services.report_service import ReportService
+from app.services.socket_service import SocketService
 from app.services.team_service import TeamService
 from app.services.user_service import UserService
 from fastapi import Form, HTTPException
@@ -39,6 +40,10 @@ def get_report_service(
 ) -> ReportService:
     return ReportService(session=db, detection_service=detection_service)
 
+def get_socket_service() -> SocketService:
+    return SocketService()
+
+# Dependency to parse the area from the request body
 def parse_area(area: str | None = Form(None)) -> Area | None:
     if area is None:
         return None

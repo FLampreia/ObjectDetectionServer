@@ -39,7 +39,7 @@ class TeamService:
             )
 
             if owner_membership is None:
-                continue  # ou lança erro se owner for obrigatório
+                continue  # todo ou lança erro se owner for obrigatório
 
             result.append(
                 TeamRead(
@@ -276,7 +276,7 @@ class TeamService:
         return member.is_favorite
 
     def update_name(self, team_id: UUID, name: str, user_id: UUID) -> None:
-        # 1. garantir que o utilizador pertence à equipa
+        # 1. Ensure the user belongs to the team.
         membership = (
             self._db.query(TeamMember)
             .filter(
@@ -289,7 +289,7 @@ class TeamService:
         if not membership:
             raise ValueError("User is not a member of this team")
 
-        # 2. buscar a equipa
+        # 2. Fetch the team.
         team = (
             self._db.query(Team)
             .filter(Team.id == team_id)
@@ -299,7 +299,7 @@ class TeamService:
         if not team:
             raise ValueError("Team not found")
 
-        # 3. atualizar nome
+        # 3. Update the name.
         team.name = name
 
         try:

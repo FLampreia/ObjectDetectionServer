@@ -15,6 +15,24 @@ detections_router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+@detections_router.get("/detections/{detection_id}/images")
+def get_detection_images(
+    detection_id: uuid.UUID,
+    service: DetectionService = Depends(get_detections_service),
+    current_user=Depends(get_current_user),
+):
+    return service.get_images_from_detection(detection_id, current_user)
+
+
+@detections_router.get("/detections/{detection_id}/frames")
+def get_detection_frames(
+    detection_id: uuid.UUID,
+    service: DetectionService = Depends(get_detections_service),
+    current_user=Depends(get_current_user),
+):
+    return service.get_frames_from_detection(detection_id, current_user)
+
+
 @detections_router.get("/detections/all", status_code=status.HTTP_200_OK)
 def get_detections_objects(
         service: DetectionService = Depends(get_detections_service),

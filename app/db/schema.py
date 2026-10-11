@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import List
 
 from pydantic import EmailStr
-from sqlalchemy import String, create_engine, DateTime, Column, Enum, ForeignKey, Boolean, Float, Integer
+from sqlalchemy import String, create_engine, DateTime, Column, Enum, ForeignKey, Boolean, Float, Integer, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker, relationship
 
 
@@ -136,14 +136,6 @@ class Detection(Base):
     area_x2: Mapped[int | None] = mapped_column(Integer, nullable=True)
     area_y2: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
-    image_public_id: Mapped[str | None] = mapped_column(
-        String, nullable=True
-    )
-
-    image_url: Mapped[str | None] = mapped_column(
-        String, nullable=True
-    )
-
     user: Mapped["User"] = relationship("User")
     team: Mapped["Team"] = relationship("Team")
 
@@ -152,9 +144,33 @@ class Detection(Base):
         back_populates="detection",
         cascade="all, delete-orphan"
     )
+    images: Mapped[list["DetectionImage"]] = relationship(
+        "DetectionImage", back_populates="detection",
+        cascade="all, delete-orphan", order_by="DetectionImage.frame_number",
+    )
+
+
+class DetectionImage(Base):
+    __tablename__ = "detection_image"
+    __table_args__ = (UniqueConstraint("detection_id", "frame_number"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    detection_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("detection.id", ondelete="CASCADE"), index=True,
+    )
+    frame_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    timestamp_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+    image_public_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    image_url: Mapped[str] = mapped_column(String)
+    detection: Mapped["Detection"] = relationship("Detection", back_populates="images")
+    objects: Mapped[list["DetectedObject"]] = relationship(
+        "DetectedObject", back_populates="image", cascade="all, delete-orphan",
+        order_by="DetectedObject.track_id",
+    )
 
 class DetectedObject(Base):
     __tablename__ = "detected_object"
+    __table_args__ = (UniqueConstraint("detection_id", "track_id"),)
 
     id: Mapped[uuid.UUID] = mapped_column(
         primary_key=True,
@@ -171,6 +187,11 @@ class DetectedObject(Base):
     object_name: Mapped[str] = mapped_column(String, index=True)
     object_class_id: Mapped[int] = mapped_column(Integer, index=True)
     confidence: Mapped[float] = mapped_column(Float)
+    track_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    image_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("detection_image.id"), nullable=True, index=True,
+    )
+    image: Mapped["DetectionImage | None"] = relationship("DetectionImage", back_populates="objects")
 
     bbox_x1: Mapped[int | None] = mapped_column(Integer, nullable=False)
     bbox_y1: Mapped[int | None] = mapped_column(Integer, nullable=False)

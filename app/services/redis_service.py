@@ -36,3 +36,18 @@ async def revoke_session(session_id: str):
 
 async def is_session_revoked(session_id: str) -> bool:
     return await redis_client.exists(f"revoked:session:{session_id}") > 0
+
+async def register_socket_session(
+        session_id: str,
+        user_id: str
+)-> None:
+    await redis_client.set(
+        name=f"socket:pending:{session_id}",
+        value=user_id,
+        ex=60
+    )
+
+async def consume_socket_session(session_id: str) -> str | None:
+    return await redis_client.getdel(
+        f"socket:pending:{session_id}"
+    )

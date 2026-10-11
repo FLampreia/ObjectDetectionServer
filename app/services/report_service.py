@@ -643,10 +643,12 @@ class ReportService:
             text_color: str,
             text_background_color: str,
     ) -> list[Flowable]:
+        if not detection.images:
+            return []
         return [
             Paragraph("Processed Result", styles["Heading2"]),
             self._create_pdf_image(
-                detection.image_url,
+                detection.images[0].image_url,
                 max_width,
                 area=[
                     detection.area_x1,

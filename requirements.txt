@@ -14,7 +14,8 @@ bcrypt==4.0.1
 aioredis==2.0.1
 redis==7.3.0
 email-validator==2.3.0
-
+websockets>=15,<18
+python-multipart>=0.0.29,<1
 
 # Tests
 coverage==7.14.0

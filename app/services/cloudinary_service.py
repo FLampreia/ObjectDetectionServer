@@ -1,4 +1,5 @@
 from uuid import uuid4
+from io import BytesIO
 
 import cloudinary
 import cloudinary.uploader
@@ -34,3 +35,14 @@ async def upload_image(image: UploadFile) -> dict:
 async def delete_image(public_id: str):
 
         return await run_in_threadpool(cloudinary.uploader.destroy, public_id)
+
+
+async def upload_frame_image(content: bytes) -> dict:
+    return await run_in_threadpool(
+        cloudinary.uploader.upload,
+        BytesIO(content),
+        resource_type="image",
+        public_id=f"object-detection/frames/{uuid4().hex}",
+        overwrite=False,
+        timeout=30,
+    )

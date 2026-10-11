@@ -2,11 +2,12 @@ import uuid
 from datetime import datetime, time, date
 from typing import List
 from sqlalchemy import select, func, Row
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
+from fastapi import HTTPException
 
-from app.db.schema import DetectedObject, User, Detection, DetectionType, Team
+from app.db.schema import DetectedObject, User, Detection, DetectionType, Team, DetectionImage, TeamMember
 from app.exceptions.custom_exceptions import DetectionNotFound, FailedDeletingFromCloud, NotAllowedToDelete
-from app.models.detect import ListObjects, ListDetections, Area
+from app.models.detect import ListObjects, ListDetections, Area, ListImages
 from app.models.stats import ModelsUsage, DetectionTypeUsage, TopObject, Stats
 from app.services.cloudinary_service import delete_image
 from app.services.user_service import UserService
@@ -61,9 +62,11 @@ class DetectionService:
         for detection in detections:
 
             # Delete images from Cloudinary
-            if detection.image_public_id:
+            for image in detection.images:
+                if image.image_public_id is None:
+                    continue
                 try:
-                    await delete_image(detection.image_public_id)
+                    await delete_image(image.image_public_id)
                 except Exception:
                     raise FailedDeletingFromCloud()
 
@@ -141,8 +144,12 @@ class DetectionService:
                 DetectedObject.bbox_y1,
                 DetectedObject.bbox_x2,
                 DetectedObject.bbox_y2,
+                DetectedObject.track_id,
+                DetectedObject.image_id,
+                DetectionImage.frame_number,
             )
             .where(DetectedObject.detection_id == detection_id)
+            .outerjoin(DetectionImage, DetectionImage.id == DetectedObject.image_id)
         )
 
         result = self._db.execute(stmt).all()
@@ -153,6 +160,9 @@ class DetectionService:
                 obj_name=r.object_name,
                 obj_class_id=r.object_class_id,
                 confidence=r.confidence,
+                track_id=r.track_id,
+                image_id=r.image_id,
+                frame_number=r.frame_number,
                 bbox=Area(
                     x1=r.bbox_x1,
                     y1=r.bbox_y1,
@@ -162,17 +172,56 @@ class DetectionService:
             ) for r in result
         ]
 
+    def get_images_from_detection(self, detection_id, current_user, frames_only=False):
+
+        detection = self.get_detection(detection_id)
+
+        if detection is None:
+            raise HTTPException(404, "Detection not found")
+
+        if detection.user_id != current_user.id:
+            member = None if detection.team_id is None else self._db.get(
+                TeamMember, (current_user.id, detection.team_id),
+            )
+            if member is None:
+                raise HTTPException(403, "Not allowed to access this detection")
+
+        statement = (
+            select(DetectionImage)
+            .where(DetectionImage.detection_id == detection_id)
+            .options(selectinload(DetectionImage.objects))
+            .order_by(DetectionImage.frame_number)
+        )
+
+        if frames_only:
+            statement = statement.where(DetectionImage.frame_number.is_not(None))
+        images = self._db.scalars(statement).all()
+
+        return [ListImages(
+            id=frame.id, frame_number=frame.frame_number,
+            timestamp_ms=frame.timestamp_ms, image_url=frame.image_url,
+            objects=[ListObjects(
+                id=obj.id, obj_name=obj.object_name, obj_class_id=obj.object_class_id,
+                confidence=obj.confidence, track_id=obj.track_id,
+                image_id=frame.id, frame_number=frame.frame_number,
+                bbox=Area(x1=obj.bbox_x1, y1=obj.bbox_y1, x2=obj.bbox_x2, y2=obj.bbox_y2),
+            ) for obj in frame.objects],
+        ) for frame in images]
+
+    def get_frames_from_detection(self, detection_id, current_user):
+        return self.get_images_from_detection(detection_id, current_user, frames_only=True)
+
     def get_detections_stats(
             self,
             current_user: User,
     ) -> Stats:
-        # Total de deteções
+        # Total detections
         total_detections = self._db.scalar(
             select(func.count(Detection.id))
             .where(Detection.user_id == current_user.id)
         ) or 0
 
-        # Total de objetos detetados
+        # Total detected objects
         total_objects = self._db.scalar(
             select(func.count(DetectedObject.id))
             .join(
@@ -182,7 +231,7 @@ class DetectionService:
             .where(Detection.user_id == current_user.id)
         ) or 0
 
-        # Objetos mais detetados
+        # Most frequently detected objects
         top_objects_result = self._db.execute(
             select(
                 DetectedObject.object_name,
@@ -206,7 +255,7 @@ class DetectionService:
             for row in top_objects_result
         ]
 
-        # Modelos mais utilizados
+        # Most frequently used models
         top_models_result = self._db.execute(
             select(
                 Detection.model,
@@ -226,7 +275,7 @@ class DetectionService:
             for row in top_models_result
         ]
 
-        # Contagem dos tipos de deteções
+        # Detection counts by type
         detection_types = self._db.execute(
             select(
                 Detection.type,
@@ -246,7 +295,7 @@ class DetectionService:
             for row in detection_types
         ]
 
-        # Últimas deteções
+        # Latest detections
         last_detections_result = self._db.execute(
             select(
                 Detection.id,

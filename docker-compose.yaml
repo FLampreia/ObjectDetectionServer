@@ -1,20 +1,34 @@
-version: "3.9"
-
 services:
   web:
     build: .
+    restart: unless-stopped
     ports:
       - "8000:80"
+    env_file:
+      - .env
     environment:
-      - DB_USER=admin
-      - DB_PASSWORD=secret
-      - DB_NAME=objectDetection.db
+      - DB_NAME=/app/data/objectDetection.db
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - PROCESSOR_HOST=${PROCESSOR_HOST:?Set PROCESSOR_HOST to the worker machine IP or hostname}
+      - PROCESSOR_PORT=${PROCESSOR_PORT:-8001}
+    volumes:
+      - backend_data:/app/data
     depends_on:
-      - redis
-
+      redis:
+        condition: service_healthy
   redis:
     image: redis:7
-    ports:
-      - "6379:6379"
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  backend_data:
+  redis_data:
