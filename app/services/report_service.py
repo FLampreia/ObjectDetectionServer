@@ -6,7 +6,7 @@ from xml.sax.saxutils import escape
 
 import httpx
 from fastapi.responses import Response
-from PIL import Image as PILImage, ImageDraw
+from PIL import Image as PILImage, ImageDraw, ImageFont
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle, StyleSheet1
@@ -15,6 +15,7 @@ from reportlab.platypus import (
     Flowable,
     Image as PDFImage,
     Paragraph,
+    PageBreak,
     KeepTogether,
     SimpleDocTemplate,
     Spacer,
@@ -498,27 +499,26 @@ class ReportService:
         elements.append(self._create_information_table(detection, objects, styles))
         elements.append(Spacer(1, 20))
 
-        elements.extend(self._create_image_section(
-            detection,
-            objects,
-            width,
-            styles,
-            area_color=area_color,
-            bbox_color=bbox_color,
-            dot_color=dot_color,
-            text_color=text_color,
-            text_background_color=text_background_color,
-            bbox_enable=bbox_enable,
-            bbox_label_enable=bbox_label_enable,
-            dot_enable=dot_enable,
-            dot_label_enable=dot_label_enable,
-        ))
-
-        # Follow the image with class totals and the complete object list.
-        if objects:
-            elements.extend(self._create_class_summary_section(objects, styles, width))
-
-        elements.extend(self._create_objects_section(objects, styles, width))
+        annotation_options = dict(
+            area_color=area_color, bbox_color=bbox_color, dot_color=dot_color,
+            text_color=text_color, text_background_color=text_background_color,
+            bbox_enable=bbox_enable, bbox_label_enable=bbox_label_enable,
+            dot_enable=dot_enable, dot_label_enable=dot_label_enable,
+        )
+        if detection.type in (DetectionType.Video, DetectionType.Stream):
+            if objects:
+                elements.extend(self._create_class_summary_section(objects, styles, width))
+            elements.extend(self._create_frames_section(
+                detection, objects, width, styles, **annotation_options,
+            ))
+        else:
+            elements.extend(self._create_image_section(
+                detection, objects, width, styles, **annotation_options,
+            ))
+            # Follow the photo with class totals and the complete object list.
+            if objects:
+                elements.extend(self._create_class_summary_section(objects, styles, width))
+            elements.extend(self._create_objects_section(objects, styles, width))
 
         def draw_page(canvas, doc):
             self._draw_report_page(canvas, doc, detection.created_at.strftime("%d/%m/%Y %H:%M"))
@@ -526,6 +526,119 @@ class ReportService:
         document.build(elements, onFirstPage=draw_page, onLaterPages=draw_page)
 
         return buffer.getvalue()
+
+    def _create_frames_section(self, detection, objects, width, styles, **annotation_options):
+        frames = sorted(
+            (image for image in detection.images if image.frame_number is not None),
+            key=lambda image: image.frame_number,
+        )
+        elements = [Paragraph("Saved Detection Frames", styles["Heading2"])]
+        if not frames:
+            elements.append(Paragraph(
+                "No saved frames are available for this detection.", styles["Normal"],
+            ))
+            # Older detections may have objects without an associated image.
+            elements.extend(self._create_objects_section(objects, styles, width))
+            return elements
+
+        elements.append(Paragraph(
+            f"{len(frames)} saved frames. Each frame shows only the objects first detected "
+            "in that frame. Annotation numbers match the object table below each image.",
+            styles["Normal"],
+        ))
+        objects_by_image = {}
+        for obj in objects:
+            objects_by_image.setdefault(obj.image_id, []).append(obj)
+        area = [detection.area_x1, detection.area_y1, detection.area_x2, detection.area_y2]
+        gap = 12
+        card_width = (width - gap) / 2
+        card_height = 100 * mm
+        cards = []
+        for frame in frames:
+            frame_objects = objects_by_image.get(frame.id, [])
+            if frame.timestamp_ms is None:
+                timestamp = "Unavailable"
+            else:
+                milliseconds = max(0, round(frame.timestamp_ms))
+                seconds, milliseconds = divmod(milliseconds, 1000)
+                minutes, seconds = divmod(seconds, 60)
+                hours, minutes = divmod(minutes, 60)
+                timestamp = f"{hours:02}:{minutes:02}:{seconds:02}.{milliseconds:03}"
+            prefix = [
+                Paragraph(f"Frame {frame.frame_number}", styles["Heading2"]),
+                Paragraph(
+                    f"{timestamp} | New objects: {len(frame_objects)}", styles["Normal"],
+                ),
+                Spacer(1, 6),
+                self._create_pdf_image(
+                    frame.image_url, card_width, area=area, objects=frame_objects,
+                    max_height=50 * mm, label_font_size=7, **annotation_options,
+                ),
+                Spacer(1, 8),
+            ]
+            if not frame_objects:
+                cards.append(prefix + [Paragraph("No objects were detected.", styles["Normal"])])
+                continue
+            table = self._create_frame_objects_table(frame_objects, card_width)
+            # Split crowded frames into bounded cards so a grid row always fits a page.
+            while table is not None:
+                prefix_height = sum(item.wrap(card_width, card_height)[1] for item in prefix)
+                available = card_height - prefix_height - 12
+                if table.wrap(card_width, available)[1] <= available:
+                    cards.append(prefix + [table])
+                    break
+                parts = table.split(card_width, available)
+                if len(parts) < 2:
+                    raise ValueError("A frame object row is too large for the compact report layout")
+                cards.append(prefix + [parts[0]])
+                table = parts[1]
+                prefix = [
+                    Paragraph(f"Frame {frame.frame_number} (continued)", styles["Heading2"]),
+                    Paragraph(timestamp, styles["Normal"]),
+                    Spacer(1, 6),
+                ]
+        rows = [[elements, "", ""]]
+        rows.extend([[cards[index], "", cards[index + 1] if index + 1 < len(cards) else ""]
+                     for index in range(0, len(cards), 2)])
+        grid = Table(rows, colWidths=[card_width, gap, card_width], hAlign="LEFT")
+        grid.setStyle(TableStyle([
+            ("SPAN", (0, 0), (-1, 0)),
+            ("NOSPLIT", (0, 0), (-1, 1)),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 0),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+            ("TOPPADDING", (0, 0), (-1, -1), 0),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 14),
+        ]))
+        elements = [Spacer(1, 12), grid]
+        frame_ids = {frame.id for frame in frames}
+        unassociated = [obj for obj in objects if obj.image_id not in frame_ids]
+        if unassociated:
+            elements.extend([
+                PageBreak(),
+                Paragraph("Objects Without a Saved Frame", styles["Heading2"]),
+                Paragraph(
+                    "These older records have no associated frame image.", styles["Normal"],
+                ),
+            ])
+            elements.extend(self._create_objects_section(unassociated, styles, width))
+        return elements
+
+    def _create_frame_objects_table(self, objects, width):
+        rows = [["#", "Track", "Object", "Conf."]]
+        for index, obj in enumerate(objects, start=1):
+            rows.append([
+                str(index), str(obj.track_id) if obj.track_id is not None else "-",
+                obj.obj_name, f"{obj.confidence * 100:.1f}%",
+            ])
+        table = self._styled_report_table(rows, (9, 15, 43, 19), width, (0, 1, 3))
+        table.setStyle(TableStyle([
+            ("LEFTPADDING", (0, 0), (-1, -1), 4),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+            ("TOPPADDING", (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ]))
+        return table
 
     def _calculate_object_statistics(self, objects: list[ListObjects]) -> dict[str, float]:
         if not objects:
@@ -690,6 +803,7 @@ class ReportService:
             dot_color: str = "yellow",
             text_color: str = "yellow",
             text_background_color: str = "black",
+            label_font_size: float | None = None,
 
     ) -> PDFImage:
 
@@ -701,17 +815,20 @@ class ReportService:
             annotated_image = source.convert("RGB")
 
         width, height = source.size
+        scale = min(max_width / width, max_height / height)
+        font = ImageFont.load_default(size=max(10, round(label_font_size / scale))) if label_font_size else None
         draw = ImageDraw.Draw(annotated_image)
         line_width = max(2, round(min(width, height) / 250))
         if all(value is not None for value in area):
             # Outline the configured detection area.
             draw.rectangle(
-                area,
+                [min(area[0], area[2]), min(area[1], area[3]),
+                 max(area[0], area[2]), max(area[1], area[3])],
                 outline=area_color,
                 width=line_width,
             )
 
-        for index, obj in enumerate(objects, start=1):
+        for index, obj in enumerate(objects or [], start=1):
 
             # Match object labels to the numbered rows in the details table.
             label = f"{index} - {obj.confidence:.0%}"
@@ -725,6 +842,8 @@ class ReportService:
                 (x_center if dot_label_enable else obj.bbox.x1) + 3,
                 max(0, ((y_center - 12) if dot_label_enable else obj.bbox.y1) - 3),
             )
+            if label_font_size:
+                text_position = (text_position[0], max(font.size + 3, text_position[1]))
 
             # Draw the bounding box when enabled.
             if bbox_enable:
@@ -760,6 +879,7 @@ class ReportService:
                 label_bbox = draw.textbbox(
                     text_position,
                     label,
+                    font=font,
                     anchor="ms" if dot_label_enable else "ls",
                 )
 
@@ -779,6 +899,7 @@ class ReportService:
                 draw.text(
                     text_position,
                     label,
+                    font=font,
                     fill=text_color,
                     anchor="ms" if dot_label_enable else "ls",
                 )
@@ -787,7 +908,6 @@ class ReportService:
         image_buffer = BytesIO()
         annotated_image.save(image_buffer, format="PNG")
 
-        scale = min(max_width / width, max_height / height)
         image_buffer.seek(0)
 
         image = PDFImage(image_buffer, width=width * scale, height=height * scale)

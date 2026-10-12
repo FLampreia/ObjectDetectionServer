@@ -85,6 +85,7 @@ class DetectService:
             created_at: datetime,
             detection_type: DetectionType,
             result: VideoProcessingResponse,
+            area: Area | None = None,
     ):
 
         detection = Detection(
@@ -95,6 +96,10 @@ class DetectService:
             processing_time_ms=result.processing_time,
             created_at=created_at,
             type=detection_type,
+            area_x1=min(area.x1, area.x2) if area is not None else None,
+            area_y1=min(area.y1, area.y2) if area is not None else None,
+            area_x2=max(area.x1, area.x2) if area is not None else None,
+            area_y2=max(area.y1, area.y2) if area is not None else None,
         )
 
         self._db.add(detection)

@@ -122,6 +122,7 @@ class SocketService:
                 created_at=created_at,
                 detection_type=DetectionType(parameters.detection_type),
                 result=result,
+                area=parameters.area,
             )
 
     async def cleanup(self, context: SocketContext):
