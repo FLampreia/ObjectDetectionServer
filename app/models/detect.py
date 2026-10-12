@@ -54,7 +54,8 @@ class StoredFrame(BaseModel):
 
 
 class VideoProcessingResponse(BaseModel):
-    processing_time: float
+    processing_time: float = Field(ge=0, allow_inf_nan=False)
+    inference_time_ms: float | None = Field(default=None, ge=0, allow_inf_nan=False)
     detections_per_frame: list[Detection]
     frames: list[StoredFrame] = Field(default_factory=list)
 

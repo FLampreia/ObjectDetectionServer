@@ -126,6 +126,7 @@ class Detection(Base):
     model: Mapped["str"] = mapped_column(String, index=True)
     conf_threshold: Mapped["float"] = mapped_column(Float)
     processing_time_ms: Mapped["float"] = mapped_column(Float)
+    inference_time_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime)
     type: Mapped[DetectionType] = mapped_column(
         Enum(DetectionType)

@@ -86,6 +86,7 @@ class DetectService:
             detection_type: DetectionType,
             result: VideoProcessingResponse,
             area: Area | None = None,
+            started_at: float | None = None,
     ):
 
         detection = Detection(
@@ -94,6 +95,7 @@ class DetectService:
             model=model,
             conf_threshold=conf_threshold,
             processing_time_ms=result.processing_time,
+            inference_time_ms=result.inference_time_ms,
             created_at=created_at,
             type=detection_type,
             area_x1=min(area.x1, area.x2) if area is not None else None,
@@ -127,7 +129,15 @@ class DetectService:
                     bbox_x2=obj.bbox[2], bbox_y2=obj.bbox[3],
                 ))
 
+        self._db.flush()
+        # Measure after writing all results, immediately before the final commit.
+        processing_time_ms = (
+            (time.perf_counter() - started_at) * 1000
+            if started_at is not None else result.processing_time
+        )
+        detection.processing_time_ms = processing_time_ms
         self._db.commit()
+        return processing_time_ms
 
     async def process_image(
             self,

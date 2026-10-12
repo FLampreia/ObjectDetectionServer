@@ -1,6 +1,7 @@
 import json
 import asyncio
 import logging
+import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from uuid import UUID
@@ -27,6 +28,7 @@ class PendingFrame:
 
 @dataclass
 class SocketContext:
+    started_at: float = field(default_factory=time.perf_counter)
     pending: PendingFrame | None = None
     last_frame_number: int = 0
     seen_tracks: set[int] = field(default_factory=set)
@@ -111,10 +113,10 @@ class SocketService:
         with SessionLocal() as db:
             self.validate_membership(db, user_id, parameters)
 
-    def save_result(self, user_id, parameters, created_at, result):
+    def save_result(self, user_id, parameters, created_at, result, started_at):
         with SessionLocal() as db:
             self.validate_membership(db, user_id, parameters)
-            DetectService(db).add_video_detection_to_db(
+            return DetectService(db).add_video_detection_to_db(
                 user_id=user_id,
                 team_id=parameters.chosen_team_id,
                 model=parameters.algorithm,
@@ -123,6 +125,7 @@ class SocketService:
                 detection_type=DetectionType(parameters.detection_type),
                 result=result,
                 area=parameters.area,
+                started_at=started_at,
             )
 
     async def cleanup(self, context: SocketContext):
@@ -166,7 +169,7 @@ class SocketService:
         self, frontend_ws: WebSocket, processor_ws, user_id: UUID,
         parameters: SocketParameters, created_at: datetime, context: SocketContext,
     ):
-        processing_time = 0.0
+        inference_time_ms = 0.0
         async for message in processor_ws:
             if not isinstance(message, str):
                 await frontend_ws.send_bytes(message)
@@ -182,29 +185,34 @@ class SocketService:
                 self.check_upload_error(context)
                 context.frames.sort(key=lambda frame: frame.frame_number)
                 result = VideoProcessingResponse(
-                    processing_time=processing_time,
+                    processing_time=(time.perf_counter() - context.started_at) * 1000,
+                    inference_time_ms=inference_time_ms,
                     detections_per_frame=[obj for frame in context.frames for obj in frame.detections],
                     frames=context.frames,
                 )
                 save_task = asyncio.create_task(run_in_threadpool(
-                    self.save_result, user_id, parameters, created_at, result,
+                    self.save_result, user_id, parameters, created_at, result, context.started_at,
                 ))
                 try:
-                    await asyncio.shield(save_task)
+                    processing_time_ms = await asyncio.shield(save_task)
                 except asyncio.CancelledError:
                     # Wait for the commit outcome before deciding whether images are orphaned.
                     await save_task
                     context.committed = True
                     raise
                 context.committed = True
-                await frontend_ws.send_json({"status": "finished", "saved": True})
+                await frontend_ws.send_json({
+                    "status": "finished", "saved": True,
+                    "processing_time_ms": processing_time_ms,
+                    "inference_time_ms": inference_time_ms,
+                })
                 return
             frame = FrameProcessingResponse.model_validate(payload)
             pending = context.pending
             if pending is None or payload.get("frame_number") != pending.metadata.frame_number:
                 raise ValueError("Worker frame response does not match the submitted image")
             context.pending = None
-            processing_time += frame.processing_time_per_frame
+            inference_time_ms += frame.processing_time_per_frame
             new_objects = context.new_objects(frame, parameters.area)
             self.check_upload_error(context)
             if new_objects:
