@@ -16,8 +16,9 @@ from app.db.schema import User
 from app.services.user_service import UserService
 from app.core.security import decode_token
 
-# todo rever questão do jti e do redis e pensar em criar o token service
+# TODO: Review JTI and Redis handling and consider a dedicated token service.
 class TokenBearer(HTTPBearer):
+    check_blocklist = True
 
     def __init__(self, auto_error: bool = True):
         super().__init__(auto_error=auto_error)
@@ -42,13 +43,13 @@ class TokenBearer(HTTPBearer):
         if not jti or not session_id:
             raise InvalidToken()
 
-        if await token_in_blocklist(jti):
+        self.verify_token_data(token_data)
+
+        if self.check_blocklist and await token_in_blocklist(jti):
             raise InvalidToken()
 
         if await is_session_revoked(session_id):
             raise InvalidToken()
-
-        self.verify_token_data(token_data)
 
         return token_data
 
@@ -63,10 +64,21 @@ class AccessTokenBearer(TokenBearer):
 
 
 class RefreshTokenBearer(TokenBearer):
+    # The refresh endpoint handles consumption and reuse in one Redis operation.
+    check_blocklist = False
 
     def verify_token_data(self, token_data: dict) -> None:
         if token_data.get("type") != "refresh":
             raise RefreshTokenRequired()
+
+
+class LogoutTokenBearer(TokenBearer):
+    # A token already consumed by rotation can still identify the session to revoke.
+    check_blocklist = False
+
+    def verify_token_data(self, token_data: dict) -> None:
+        if token_data.get("type") not in ("access", "refresh"):
+            raise InvalidToken()
 
 
 def get_current_user(
@@ -88,7 +100,7 @@ def get_current_user(
 #     return token_details["user"]["roles"]
 
 
-# TODO verificar a utilização de roles para aceder aos endpoints
+# TODO: Review role-based access to endpoints.
 # class RoleChecker:
 #
 #     def __init__(self, allowed_roles: List[str]):

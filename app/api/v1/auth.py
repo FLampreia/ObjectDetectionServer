@@ -4,13 +4,11 @@ from datetime import timedelta
 from fastapi.responses import JSONResponse
 from app.core.config import config
 from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
 from starlette import status
-from app.services.redis_service import add_jti_to_blocklist, token_in_blocklist, revoke_session, is_session_revoked
-from app.core.security import create_token, decode_token
-from app.core.token import get_user_service, get_current_user, AccessTokenBearer, RefreshTokenBearer
-from app.exceptions.custom_exceptions import InvalidCredentials, InvalidToken, InvalidSession, MalformedToken, \
-    RevokedToken
+from app.services.redis_service import add_jti_to_blocklist, revoke_session, consume_refresh_token
+from app.core.security import create_token
+from app.core.token import get_user_service, get_current_user, LogoutTokenBearer, RefreshTokenBearer
+from app.exceptions.custom_exceptions import InvalidCredentials, InvalidToken, MalformedToken, RevokedToken, UserNotFound
 from app.models.token import TokenResponse
 from app.models.user import UserRead, UserLogin, UserCreate
 from app.services.user_service import UserService
@@ -23,7 +21,7 @@ def create_user(
         user: UserCreate,
         service: UserService = Depends(get_user_service),
 ):
-    logger.info("Creating user with data: %s", user)
+    logger.info("Creating user")
     return service.create_user(user.username, user.password, user.email, user.full_name)
 
 
@@ -32,7 +30,7 @@ async def login(
         user: UserLogin,
         service: UserService = Depends(get_user_service)
 ):
-    logger.info("Trying to logging user with data: %s", user)
+    logger.info("Attempting user login")
 
     # Verify if credentials are valid
     if not service.verify_login(user.email, user.password):
@@ -54,7 +52,7 @@ async def login(
         expires_delta=timedelta(days=config.REFRESH_TOKEN_EXPIRE_DAYS)
     )
 
-    logger.info("Logged in user with data: %s", user)
+    logger.info("User login succeeded")
 
     return JSONResponse(
         content={
@@ -73,12 +71,12 @@ def me (
 
 @auth_router.post("/logout", status_code=status.HTTP_200_OK)
 async def logout(
-        token_details: dict = Depends(AccessTokenBearer())
+        token_details: dict = Depends(LogoutTokenBearer())
 ):
     jti = token_details["jti"]
     session_id = token_details["session_id"]
 
-    await add_jti_to_blocklist(jti)
+    await add_jti_to_blocklist(jti, token_details["exp"])
     await revoke_session(session_id)
 
     return JSONResponse(
@@ -89,7 +87,8 @@ async def logout(
 
 @auth_router.post("/refresh", response_model=TokenResponse, status_code=status.HTTP_200_OK)
 async def refresh(
-        token_details: dict = Depends(RefreshTokenBearer())
+        token_details: dict = Depends(RefreshTokenBearer()),
+        service: UserService = Depends(get_user_service),
 ):
     jti = token_details["jti"]
     sub = token_details["sub"]
@@ -98,14 +97,15 @@ async def refresh(
     if not jti or not sub or not session_id:
         raise MalformedToken()
 
-    if await token_in_blocklist(jti): # if jti was used, revoke session, to protect from attack
-        await revoke_session(session_id)
-        raise RevokedToken()
+    try:
+        user = service.get_user(uuid.UUID(sub))
+    except (ValueError, UserNotFound):
+        raise InvalidToken()
+    if user is None:
+        raise InvalidToken()
 
-    if await is_session_revoked(session_id):
+    if not await consume_refresh_token(jti, session_id, token_details["exp"]):
         raise RevokedToken()
-
-    await add_jti_to_blocklist(jti)
 
     new_access_token = create_token(
         sub=sub,

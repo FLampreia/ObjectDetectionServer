@@ -26,4 +26,4 @@ def test_logout_with_refresh_token(client, login_user, first_user_payload):
         headers={"Authorization": f"Bearer {refresh_token}"}
     )
 
-    assert response.status_code == 401
+    assert response.status_code == 200

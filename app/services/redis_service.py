@@ -1,15 +1,35 @@
 from app.core.config import config
 from app.core.redis_config import redis_client
 from app.exceptions.custom_exceptions import RedisNotAvailable
+import math
+import time
 
 
-async def add_jti_to_blocklist(jti: str) -> None:
+async def add_jti_to_blocklist(jti: str, expires_at: float | None = None) -> None:
 
     await redis_client.set(
         name=jti,
         value="",
-        ex=config.JTI_EXPIRY
+        ex=max(1, math.ceil(expires_at - time.time())) if expires_at is not None else config.JTI_EXPIRY
     )
+
+
+async def consume_refresh_token(jti: str, session_id: str, expires_at: float) -> bool:
+    """Consume a refresh token once and revoke its session on detected reuse."""
+    script = """
+    if redis.call('EXISTS', KEYS[2]) == 1 then return 0 end
+    if redis.call('EXISTS', KEYS[1]) == 1 then
+        redis.call('SET', KEYS[2], 'true', 'EX', ARGV[2])
+        return 0
+    end
+    redis.call('SET', KEYS[1], 'used', 'EX', ARGV[1])
+    return 1
+    """
+    return bool(await redis_client.eval(
+        script, 2, jti, f"revoked:session:{session_id}",
+        max(1, math.ceil(expires_at - time.time())),
+        60 * 60 * 24 * config.REFRESH_TOKEN_EXPIRE_DAYS,
+    ))
 
 
 async def token_in_blocklist(jti: str) -> bool:

@@ -1,5 +1,5 @@
 import hashlib
-from datetime import timedelta, datetime
+from datetime import timedelta, datetime, timezone
 import jwt
 from jwt import PyJWTError
 from passlib.context import CryptContext
@@ -34,7 +34,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 def create_token(sub: str, expires_delta: timedelta = None, type: Literal["access", "refresh"] = "access", session_id: str = None):
 
-    expire = datetime.now() + (
+    expire = datetime.now(timezone.utc) + (
         expires_delta if expires_delta else timedelta(minutes=config.ACCESS_TOKEN_EXPIRE_MINUTES)
     )
 
@@ -59,11 +59,12 @@ def decode_token(token: str) -> dict:
         token_data = jwt.decode(
             jwt = token,
             key = config.JWT_SECRET,
-            algorithms = config.JWT_ALGORITHM
+            algorithms = [config.JWT_ALGORITHM],
+            options={"require": ["exp", "sub", "session_id", "jti", "type"]},
         )
 
         return token_data
 
-    except PyJWTError as e:
-        logging.exception(e)
+    except PyJWTError:
+        logging.debug("Token validation failed")
         return None
