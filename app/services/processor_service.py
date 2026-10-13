@@ -125,6 +125,8 @@ class DetectService:
                     detection_id=detection.id, image_id=image_id, track_id=obj.track_id,
                     object_name=obj.class_name, object_class_id=obj.class_id,
                     confidence=obj.confidence,
+                    mean_confidence=obj.mean_confidence,
+                    confidence_samples=obj.confidence_samples,
                     bbox_x1=obj.bbox[0], bbox_y1=obj.bbox[1],
                     bbox_x2=obj.bbox[2], bbox_y2=obj.bbox[3],
                 ))
@@ -194,41 +196,6 @@ class DetectService:
         )
 
         return response.json()
-
-    #
-    # async def process_video(
-    #         self,
-    #         video: UploadFile,
-    #         current_user_id: UUID,
-    #         conf_threshold: str,
-    #         algorithm: str,
-    #         chosen_team_id: UUID | None = None,
-    #         chosen_class_id: list[str] | None = None,
-    #         # TODO: Implement area handling.
-    # ):
-    #
-    #
-    #     async with httpx.AsyncClient() as client:
-    #         response = await client.post(
-    #             f"http://{config.PROCESSOR_HOST}:{config.PROCESSOR_PORT}/detect/video",
-    #             data={
-    #                 "algorithm": algorithm,
-    #                 "conf_threshold": conf_threshold,
-    #                 "chosen_class_id": chosen_class_id,
-    #             },
-    #             files=[
-    #                 (
-    #                     "video",
-    #                     (
-    #                         video.filename,
-    #                         video.file,
-    #                         video.content_type,
-    #                     )
-    #                 )
-    #             ],
-    #         )
-    #
-    #     response.raise_for_status()
 
     async def get_models_list(self):
         async with httpx.AsyncClient() as client:

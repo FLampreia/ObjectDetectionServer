@@ -548,7 +548,10 @@ class ReportService:
         ))
         objects_by_image = {}
         for obj in objects:
-            objects_by_image.setdefault(obj.image_id, []).append(obj)
+            frame_object = obj.model_copy(update={
+                "confidence": obj.frame_confidence if obj.frame_confidence is not None else obj.confidence,
+            })
+            objects_by_image.setdefault(obj.image_id, []).append(frame_object)
         area = [detection.area_x1, detection.area_y1, detection.area_x2, detection.area_y2]
         gap = 12
         card_width = (width - gap) / 2
@@ -625,13 +628,12 @@ class ReportService:
         return elements
 
     def _create_frame_objects_table(self, objects, width):
-        rows = [["#", "Track", "Object", "Conf."]]
+        rows = [["#", "Object", "Conf."]]
         for index, obj in enumerate(objects, start=1):
             rows.append([
-                str(index), str(obj.track_id) if obj.track_id is not None else "-",
-                obj.obj_name, f"{obj.confidence * 100:.1f}%",
+                str(index), obj.obj_name, f"{obj.confidence * 100:.1f}%",
             ])
-        table = self._styled_report_table(rows, (9, 15, 43, 19), width, (0, 1, 3))
+        table = self._styled_report_table(rows, (9, 58, 19), width, (0, 2))
         table.setStyle(TableStyle([
             ("LEFTPADDING", (0, 0), (-1, -1), 4),
             ("RIGHTPADDING", (0, 0), (-1, -1), 4),

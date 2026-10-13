@@ -188,6 +188,8 @@ class DetectedObject(Base):
     object_name: Mapped[str] = mapped_column(String, index=True)
     object_class_id: Mapped[int] = mapped_column(Integer, index=True)
     confidence: Mapped[float] = mapped_column(Float)
+    mean_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    confidence_samples: Mapped[int | None] = mapped_column(Integer, nullable=True)
     track_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     image_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("detection_image.id"), nullable=True, index=True,

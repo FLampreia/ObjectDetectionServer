@@ -17,6 +17,8 @@ class Detection(BaseModel):
     class_id: int
     class_name: str
     confidence: float
+    mean_confidence: float | None = Field(default=None, ge=0, le=1)
+    confidence_samples: int | None = Field(default=None, ge=1)
     bbox: list[int] = Field(min_length=4, max_length=4)
 
 class Area(BaseModel):
@@ -78,6 +80,9 @@ class ListObjects(BaseModel):
     obj_name: str
     obj_class_id: int
     confidence: float
+    frame_confidence: float | None = None
+    mean_confidence: float | None = None
+    confidence_samples: int | None = None
     bbox: Area
     track_id: int | None = None
     image_id: uuid.UUID | None = None
