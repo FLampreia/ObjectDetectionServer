@@ -31,6 +31,17 @@ from app.models.detect import ListObjects, ListDetections, Area
 from app.services.detections_service import DetectionService
 
 
+class ChapterReportDocument(SimpleDocTemplate):
+    """Expose chapter headings in the PDF reader's navigation panel."""
+
+    def afterFlowable(self, flowable):
+        if isinstance(flowable, Paragraph) and flowable.style.name == "Chapter":
+            title = flowable.getPlainText()
+            key = f"chapter-{title.split('.')[0]}"
+            self.canv.bookmarkPage(key)
+            self.canv.addOutlineEntry(title, key, level=0, closed=False)
+
+
 class ReportService:
     def __init__(
             self,
@@ -85,6 +96,7 @@ class ReportService:
             dot_color: str,
             text_color: str,
             text_background_color: str,
+            line_color: str = "#A78BFA",
     ) -> Response:
 
         detection = self._detection_service.get_detection(detection_id)
@@ -96,6 +108,7 @@ class ReportService:
             detection,
             objects,
             area_color=area_color,
+            line_color=line_color,
             bbox_color=bbox_color,
             dot_color=dot_color,
             text_color=text_color,
@@ -118,7 +131,7 @@ class ReportService:
         )
 
     def _create_document(self, buffer: BytesIO) -> SimpleDocTemplate:
-        return SimpleDocTemplate(
+        return ChapterReportDocument(
             buffer,
             pagesize=A4,
             rightMargin=15 * mm,
@@ -168,6 +181,10 @@ class ReportService:
         styles["Normal"].fontSize = 9
         styles["Normal"].leading = 13
         styles["Normal"].textColor = colors.HexColor("#475467")
+        styles.add(ParagraphStyle("Chapter", parent=styles["Heading1"],
+            fontName="Helvetica-Bold", fontSize=16, leading=21,
+            textColor=colors.HexColor("#182230"), spaceBefore=16, spaceAfter=12,
+            keepWithNext=True))
 
         return styles
 
@@ -282,7 +299,7 @@ class ReportService:
         buffer = BytesIO()
 
         # Reserve space above and below the content for page decorations.
-        document = SimpleDocTemplate(
+        document = ChapterReportDocument(
             buffer,
             pagesize=A4,
             leftMargin=15 * mm,
@@ -298,7 +315,7 @@ class ReportService:
         # Define the interval report's typography and color palette.
         ink = colors.HexColor("#182230")
         muted = colors.HexColor("#475467")
-        styles = getSampleStyleSheet()
+        styles = self._report_styles()
 
         brand = ParagraphStyle(
             "IntervalBrand",
@@ -333,15 +350,6 @@ class ReportService:
             leading=18,
         )
 
-        heading = ParagraphStyle(
-            "IntervalHeading",
-            parent=styles["Heading2"],
-            textColor=ink,
-            fontSize=12,
-            leading=16,
-            spaceAfter=8,
-        )
-
         # Start with the report identity and the selected date range.
         period = f"{start_date:%d/%m/%Y} - {end_date:%d/%m/%Y}"
 
@@ -350,6 +358,7 @@ class ReportService:
             Paragraph("Detection report", title),
             Paragraph(f"Period: {period}", body),
             Spacer(1, 16),
+            Paragraph("1. Overview", styles["Chapter"]),
         ]
         # Summarize the filtered results before listing individual detections.
         total_objects = sum(detection.count for detection in detections)
@@ -368,7 +377,7 @@ class ReportService:
             ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
         ]))
 
-        elements.extend([summary, Spacer(1, 20), Paragraph("Detections in this period", heading)])
+        elements.extend([summary, Spacer(1, 20), Paragraph("2. Detections in this period", styles["Chapter"])])
 
         # An empty result still produces a useful report with a clear message.
         if detections:
@@ -477,6 +486,7 @@ class ReportService:
             dot_color: str,
             text_color: str,
             text_background_color: str,
+            line_color: str = "#A78BFA",
     ) -> bytes:
         buffer = BytesIO()
         document = self._create_document(buffer)
@@ -496,31 +506,39 @@ class ReportService:
         ])
 
         # Show detection metadata before the annotated image.
+        elements.append(Paragraph("1. Overview", styles["Chapter"]))
         elements.append(self._create_information_table(detection, objects, styles))
         elements.append(Spacer(1, 20))
 
         annotation_options = dict(
-            area_color=area_color, bbox_color=bbox_color, dot_color=dot_color,
+            area_color=area_color, line_color=line_color, bbox_color=bbox_color, dot_color=dot_color,
             text_color=text_color, text_background_color=text_background_color,
             bbox_enable=bbox_enable, bbox_label_enable=bbox_label_enable,
             dot_enable=dot_enable, dot_label_enable=dot_label_enable,
         )
         if detection.type in (DetectionType.Video, DetectionType.Stream):
+            elements.append(Paragraph("2. Object summary", styles["Chapter"]))
             if objects:
                 elements.extend(self._create_class_summary_section(objects, styles, width))
+            else:
+                elements.append(Paragraph("No objects were detected.", styles["Normal"]))
+            elements.extend([PageBreak(), Paragraph("3. First detection frames", styles["Chapter"])])
             elements.extend(self._create_frames_section(
                 detection, objects, width, styles, **annotation_options,
             ))
             if detection.line_x1 is not None:
+                elements.extend([PageBreak(), Paragraph("4. Line passages", styles["Chapter"])])
                 elements.extend(self._create_crossings_section(detection, width, styles, **annotation_options))
         else:
+            elements.append(Paragraph("2. Annotated image", styles["Chapter"]))
             elements.extend(self._create_image_section(
                 detection, objects, width, styles, **annotation_options,
             ))
             # Follow the photo with class totals and the complete object list.
+            elements.append(Paragraph("3. Detected objects", styles["Chapter"]))
             if objects:
                 elements.extend(self._create_class_summary_section(objects, styles, width))
-            elements.extend(self._create_objects_section(objects, styles, width))
+            elements.extend(self._create_objects_section(objects, styles, width, show_heading=False))
 
         def draw_page(canvas, doc):
             self._draw_report_page(canvas, doc, detection.created_at.strftime("%d/%m/%Y %H:%M"))
@@ -534,13 +552,14 @@ class ReportService:
             (image for image in detection.images if image.frame_number is not None and image.objects),
             key=lambda image: image.frame_number,
         )
-        elements = [Paragraph("Saved Detection Frames", styles["Heading2"])]
+        elements = []
         if not frames:
             elements.append(Paragraph(
                 "No saved frames are available for this detection.", styles["Normal"],
             ))
             # Older detections may have objects without an associated image.
-            elements.extend(self._create_objects_section(objects, styles, width))
+            if objects:
+                elements.extend(self._create_objects_section(objects, styles, width))
             return elements
 
         elements.append(Paragraph(
@@ -633,7 +652,7 @@ class ReportService:
     def _create_crossings_section(self, detection, width, styles, **annotation_options):
         events = sorted(detection.crossings, key=lambda event: (event.frame_number, event.track_id))
         forward = sum(event.direction == "A_to_B" for event in events)
-        elements = [Paragraph("Line Crossings", styles["Heading2"]), Paragraph(
+        elements = [Paragraph(
             f"Total passages: {len(events)} | A to B: {forward} | B to A: {len(events) - forward}", styles["Normal"]),
             Paragraph("Crossings use the bounding-box center. A and B are the sides of the oriented line.", styles["Normal"]),
             Spacer(1, 10)]
@@ -734,6 +753,16 @@ class ReportService:
             area_style,
         )
 
+    def _create_line_content(self, detection: Detection, styles: StyleSheet1) -> Paragraph | str:
+        coordinates = (detection.line_x1, detection.line_y1, detection.line_x2, detection.line_y2)
+        if any(value is None for value in coordinates):
+            return "No counting line"
+        return Paragraph(
+            f"<b>Start Point:</b> x = {detection.line_x1:g}, y = {detection.line_y1:g}<br/>"
+            f"<b>Final Point:</b> x = {detection.line_x2:g}, y = {detection.line_y2:g}",
+            styles["Normal"],
+        )
+
     def _create_information_table(
             self,
             detection: Detection,
@@ -761,13 +790,15 @@ class ReportService:
             ["Lowest Confidence", f"{statistics['lowest'] * 100:.2f}%"],
             ["Area", self._create_area_content(detection, styles)],
         ]
+        if detection.type in (DetectionType.Video, DetectionType.Stream):
+            rows.append(["Line", self._create_line_content(detection, styles)])
         label_style = ParagraphStyle(
             "InformationLabel",
             parent=styles["Normal"],
             fontName="Helvetica-Bold",
         )
 
-        # Preserve formatted area content while escaping plain metadata values.
+        # Preserve formatted area and line content while escaping plain metadata values.
         rows = [
             [
                 Paragraph(escape(label), label_style),
@@ -803,11 +834,11 @@ class ReportService:
             dot_color: str,
             text_color: str,
             text_background_color: str,
+            line_color: str = "#A78BFA",
     ) -> list[Flowable]:
         if not detection.images:
-            return []
+            return [Paragraph("No saved image is available for this detection.", styles["Normal"])]
         return [
-            Paragraph("Processed Result", styles["Heading2"]),
             self._create_pdf_image(
                 detection.images[0].image_url,
                 max_width,
@@ -853,6 +884,7 @@ class ReportService:
             text_background_color: str = "black",
             label_font_size: float | None = None,
             line: list[float | None] | None = None,
+            line_color: str = "#A78BFA",
 
     ) -> PDFImage:
 
@@ -869,7 +901,7 @@ class ReportService:
         draw = ImageDraw.Draw(annotated_image)
         line_width = max(2, round(min(width, height) / 250))
         if line is not None and all(value is not None for value in line):
-            draw.line(line, fill="#a78bfa", width=line_width)
+            draw.line(line, fill=line_color, width=line_width)
             dx, dy = line[2] - line[0], line[3] - line[1]
             length = (dx * dx + dy * dy) ** 0.5
             if length:
@@ -878,7 +910,7 @@ class ReportService:
                 for label, sign in (("A", -1), ("B", 1)):
                     point = ((line[0] + line[2]) / 2 - sign * dy / length * offset,
                              (line[1] + line[3]) / 2 + sign * dx / length * offset)
-                    draw.text(point, label, font=side_font, anchor="mm", fill="#a78bfa",
+                    draw.text(point, label, font=side_font, anchor="mm", fill=line_color,
                               stroke_width=2, stroke_fill="black")
         if all(value is not None for value in area):
             # Outline the configured detection area.
@@ -1023,10 +1055,9 @@ class ReportService:
             objects: list[ListObjects],
             styles: StyleSheet1,
             width: float = 176 * mm,
+            show_heading: bool = True,
     ) -> list[Flowable]:
-        elements = [
-            Paragraph("Detected Objects", styles["Heading2"]),
-        ]
+        elements = [Paragraph("Detected Objects", styles["Heading2"])] if show_heading else []
 
         if not objects:
             elements.append(Paragraph("No objects were detected.", styles["Normal"]))

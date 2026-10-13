@@ -117,6 +117,7 @@ def generate_detection_report(
         text_color: str,
         text_background_color: str,
 
+        line_color: str = "#A78BFA",
         service: ReportService = Depends(get_report_service),
         current_user=Depends(get_current_user),
 ):
@@ -127,6 +128,7 @@ def generate_detection_report(
     return service.generate_single_detection_report(
         detection_id=detection_id,
         area_color=area_color,
+        line_color=line_color,
         bbox_color=bbox_color,
         dot_color=dot_color,
         text_color=text_color,
