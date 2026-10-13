@@ -202,9 +202,16 @@ class DetectionService:
             statement = statement.where(DetectionImage.frame_number.is_not(None))
         images = self._db.scalars(statement).all()
 
+        area_coordinates = (detection.area_x1, detection.area_y1, detection.area_x2, detection.area_y2)
+        area = Area(x1=area_coordinates[0], y1=area_coordinates[1],
+                    x2=area_coordinates[2], y2=area_coordinates[3]) if all(
+            coordinate is not None for coordinate in area_coordinates
+        ) else None
+
         return [ListImages(
             id=frame.id, frame_number=frame.frame_number,
             timestamp_ms=frame.timestamp_ms, image_url=frame.image_url,
+            area=area,
             objects=[ListObjects(
                 id=obj.id, obj_name=obj.object_name, obj_class_id=obj.object_class_id,
                 confidence=obj.confidence, track_id=obj.track_id,

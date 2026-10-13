@@ -94,4 +94,5 @@ class ListImages(BaseModel):
     frame_number: int | None
     timestamp_ms: float | None
     image_url: str
+    area: Area | None = None
     objects: list[ListObjects]
