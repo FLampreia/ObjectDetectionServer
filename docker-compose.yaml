@@ -3,23 +3,31 @@ services:
     build: .
     restart: unless-stopped
     ports:
-      - "8000:80"
+      - "127.0.0.1:${BACKEND_PORT:-8000}:80"
     env_file:
       - .env
     environment:
       - DB_NAME=/app/data/objectDetection.db
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - PROCESSOR_HOST=${PROCESSOR_HOST:?Set PROCESSOR_HOST to the worker machine IP or hostname}
-      - PROCESSOR_PORT=${PROCESSOR_PORT:-8001}
+      - PROCESSOR_HOST=${DOCKER_PROCESSOR_HOST:-host.docker.internal}
+      - PROCESSOR_PORT=${DOCKER_PROCESSOR_PORT:-8001}
     volumes:
-      - backend_data:/app/data
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
     depends_on:
       redis:
         condition: service_healthy
   redis:
     image: redis:7
     restart: unless-stopped
+    ports:
+      - "127.0.0.1:6379:6379"
     command: ["redis-server", "--appendonly", "yes"]
     volumes:
       - redis_data:/data
@@ -30,5 +38,4 @@ services:
       retries: 10
 
 volumes:
-  backend_data:
   redis_data:

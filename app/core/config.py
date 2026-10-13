@@ -32,7 +32,8 @@ class Config(BaseSettings):
 
     @property
     def db_url(self):
-        return f"sqlite:///./{self.DB_NAME}"
+        database_name = self.DB_NAME.replace("\\", "/")
+        return f"sqlite:///{database_name}"
 
 
 config = Config()

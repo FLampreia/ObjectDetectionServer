@@ -64,6 +64,13 @@ def create_app(engine = None, with_lifespan: bool = True) -> FastAPI:
 
     register_all_exceptions(fastapi_app)
 
+    @fastapi_app.get("/health", tags=["Health"])
+    async def health():
+        """Report readiness without invoking the processing worker."""
+
+        await check_redis_connection()
+        return {"status": "ok"}
+
     # Register routes
     fastapi_app.include_router(
         user_router,
