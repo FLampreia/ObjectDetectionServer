@@ -136,6 +136,13 @@ class Detection(Base):
     area_y1: Mapped[int | None] = mapped_column(Integer, nullable=True)
     area_x2: Mapped[int | None] = mapped_column(Integer, nullable=True)
     area_y2: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    line_x1: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    line_y1: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    line_x2: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    line_y2: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    crossings: Mapped[list["LineCrossing"]] = relationship(
+        "LineCrossing", back_populates="detection", cascade="all, delete-orphan",
+    )
 
     user: Mapped["User"] = relationship("User")
     team: Mapped["Team"] = relationship("Team")
@@ -168,6 +175,30 @@ class DetectionImage(Base):
         "DetectedObject", back_populates="image", cascade="all, delete-orphan",
         order_by="DetectedObject.track_id",
     )
+    crossings: Mapped[list["LineCrossing"]] = relationship(
+        "LineCrossing", back_populates="image", cascade="all, delete-orphan",
+    )
+
+
+class LineCrossing(Base):
+    __tablename__ = "line_crossing"
+    __table_args__ = (UniqueConstraint("detection_id", "frame_number", "track_id"),)
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    detection_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("detection.id", ondelete="CASCADE"), index=True)
+    image_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("detection_image.id", ondelete="CASCADE"), index=True)
+    object_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("detected_object.id", ondelete="CASCADE"), index=True)
+    track_id: Mapped[int] = mapped_column(Integer)
+    direction: Mapped[str] = mapped_column(String)
+    frame_number: Mapped[int] = mapped_column(Integer)
+    timestamp_ms: Mapped[float] = mapped_column(Float)
+    confidence: Mapped[float] = mapped_column(Float)
+    bbox_x1: Mapped[int] = mapped_column(Integer)
+    bbox_y1: Mapped[int] = mapped_column(Integer)
+    bbox_x2: Mapped[int] = mapped_column(Integer)
+    bbox_y2: Mapped[int] = mapped_column(Integer)
+    detection: Mapped["Detection"] = relationship("Detection", back_populates="crossings")
+    image: Mapped["DetectionImage"] = relationship("DetectionImage", back_populates="crossings")
+    object: Mapped["DetectedObject"] = relationship("DetectedObject")
 
 class DetectedObject(Base):
     __tablename__ = "detected_object"

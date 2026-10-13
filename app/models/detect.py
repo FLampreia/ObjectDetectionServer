@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 
 from pydantic import BaseModel
-from pydantic import Field
+from pydantic import Field, model_validator
 from typing import Literal
 
 from app.db.schema import DetectionType
@@ -27,9 +27,23 @@ class Area(BaseModel):
     x2: int
     y2: int
 
+
+class Line(Area):
+    @model_validator(mode="after")
+    def validate_endpoints(self):
+        if (self.x1, self.y1) == (self.x2, self.y2):
+            raise ValueError("Counting line must have two different endpoints")
+        return self
+
+
+class CrossingEvent(Detection):
+    track_id: int
+    direction: Literal["A_to_B", "B_to_A"]
+
 class FrameProcessingResponse(BaseModel):
     processing_time_per_frame: float = Field(ge=0)
     detections_per_frame: list[Detection]
+    crossings: list[CrossingEvent] = Field(default_factory=list)
 
 
 class SocketParameters(BaseModel):
@@ -39,6 +53,7 @@ class SocketParameters(BaseModel):
     chosen_team_id: uuid.UUID | None = None
     chosen_class_id: list[int] | None = None
     area: Area | None = None
+    line: Line | None = None
 
 
 class FrameMetadata(BaseModel):
@@ -52,7 +67,8 @@ class StoredFrame(BaseModel):
     timestamp_ms: float = Field(ge=0)
     image_public_id: str
     image_url: str
-    detections: list[Detection] = Field(min_length=1)
+    detections: list[Detection] = Field(default_factory=list)
+    crossings: list[CrossingEvent] = Field(default_factory=list)
 
 
 class VideoProcessingResponse(BaseModel):
@@ -95,4 +111,20 @@ class ListImages(BaseModel):
     timestamp_ms: float | None
     image_url: str
     area: Area | None = None
+    line: Line | None = None
     objects: list[ListObjects]
+    crossings: list["ListCrossing"] = Field(default_factory=list)
+
+
+class ListCrossing(BaseModel):
+    id: uuid.UUID
+    object_id: uuid.UUID
+    image_id: uuid.UUID
+    track_id: int
+    obj_name: str
+    obj_class_id: int
+    direction: Literal["A_to_B", "B_to_A"]
+    confidence: float
+    frame_number: int
+    timestamp_ms: float
+    bbox: Area

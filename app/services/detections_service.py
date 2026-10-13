@@ -5,9 +5,9 @@ from sqlalchemy import select, func, Row
 from sqlalchemy.orm import Session, selectinload
 from fastapi import HTTPException
 
-from app.db.schema import DetectedObject, User, Detection, DetectionType, Team, DetectionImage, TeamMember
+from app.db.schema import DetectedObject, User, Detection, DetectionType, Team, DetectionImage, TeamMember, LineCrossing
 from app.exceptions.custom_exceptions import DetectionNotFound, FailedDeletingFromCloud, NotAllowedToDelete
-from app.models.detect import ListObjects, ListDetections, Area, ListImages
+from app.models.detect import ListObjects, ListDetections, Area, Line, ListImages, ListCrossing
 from app.models.stats import ModelsUsage, DetectionTypeUsage, TopObject, Stats
 from app.services.cloudinary_service import delete_image
 from app.services.user_service import UserService
@@ -194,7 +194,8 @@ class DetectionService:
         statement = (
             select(DetectionImage)
             .where(DetectionImage.detection_id == detection_id)
-            .options(selectinload(DetectionImage.objects))
+            .options(selectinload(DetectionImage.objects),
+                     selectinload(DetectionImage.crossings).selectinload(LineCrossing.object))
             .order_by(DetectionImage.frame_number)
         )
 
@@ -207,11 +208,18 @@ class DetectionService:
                     x2=area_coordinates[2], y2=area_coordinates[3]) if all(
             coordinate is not None for coordinate in area_coordinates
         ) else None
+        line_coordinates = (detection.line_x1, detection.line_y1, detection.line_x2, detection.line_y2)
+        line = Line(x1=line_coordinates[0], y1=line_coordinates[1],
+                    x2=line_coordinates[2], y2=line_coordinates[3]) if all(
+            coordinate is not None for coordinate in line_coordinates
+        ) else None
 
         return [ListImages(
             id=frame.id, frame_number=frame.frame_number,
             timestamp_ms=frame.timestamp_ms, image_url=frame.image_url,
             area=area,
+            line=line,
+            crossings=[self.serialize_crossing(event) for event in frame.crossings],
             objects=[ListObjects(
                 id=obj.id, obj_name=obj.object_name, obj_class_id=obj.object_class_id,
                 confidence=obj.confidence, track_id=obj.track_id,
@@ -224,6 +232,17 @@ class DetectionService:
 
     def get_frames_from_detection(self, detection_id, current_user):
         return self.get_images_from_detection(detection_id, current_user, frames_only=True)
+
+    @staticmethod
+    def serialize_crossing(event):
+        return ListCrossing(
+            id=event.id, object_id=event.object_id, image_id=event.image_id,
+            track_id=event.track_id, obj_name=event.object.object_name,
+            obj_class_id=event.object.object_class_id, direction=event.direction,
+            confidence=event.confidence, frame_number=event.frame_number,
+            timestamp_ms=event.timestamp_ms,
+            bbox=Area(x1=event.bbox_x1, y1=event.bbox_y1, x2=event.bbox_x2, y2=event.bbox_y2),
+        )
 
     def get_detections_stats(
             self,

@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from fastapi import UploadFile
 import json
 from app.core.config import config
-from app.db.schema import Detection, DetectedObject, DetectionType, DetectionImage
+from app.db.schema import Detection, DetectedObject, DetectionType, DetectionImage, LineCrossing
 from app.models.detect import FrameProcessingResponse, VideoProcessingResponse, Area
 from app.services.user_service import UserService
 
@@ -87,6 +87,7 @@ class DetectService:
             result: VideoProcessingResponse,
             area: Area | None = None,
             started_at: float | None = None,
+            line: Area | None = None,
     ):
 
         detection = Detection(
@@ -102,12 +103,17 @@ class DetectService:
             area_y1=min(area.y1, area.y2) if area is not None else None,
             area_x2=max(area.x1, area.x2) if area is not None else None,
             area_y2=max(area.y1, area.y2) if area is not None else None,
+            line_x1=line.x1 if line is not None else None,
+            line_y1=line.y1 if line is not None else None,
+            line_x2=line.x2 if line is not None else None,
+            line_y2=line.y2 if line is not None else None,
         )
 
         self._db.add(detection)
         self._db.flush()
 
         groups = []
+        frame_ids = {}
         for saved_frame in result.frames:
             frame = DetectionImage(
                 detection_id=detection.id, frame_number=saved_frame.frame_number,
@@ -117,11 +123,13 @@ class DetectService:
             self._db.add(frame)
             self._db.flush()
             groups.append((frame.id, saved_frame.detections))
+            frame_ids[saved_frame.frame_number] = frame.id
         if not result.frames:
             groups.append((None, result.detections_per_frame))
+        objects_by_track = {}
         for image_id, objects in groups:
             for obj in objects:
-                self._db.add(DetectedObject(
+                detected_object = DetectedObject(
                     detection_id=detection.id, image_id=image_id, track_id=obj.track_id,
                     object_name=obj.class_name, object_class_id=obj.class_id,
                     confidence=obj.confidence,
@@ -129,8 +137,23 @@ class DetectService:
                     confidence_samples=obj.confidence_samples,
                     bbox_x1=obj.bbox[0], bbox_y1=obj.bbox[1],
                     bbox_x2=obj.bbox[2], bbox_y2=obj.bbox[3],
-                ))
+                )
+                self._db.add(detected_object)
+                objects_by_track[obj.track_id] = detected_object
 
+        self._db.flush()
+        for saved_frame in result.frames:
+            for event in saved_frame.crossings:
+                detected_object = objects_by_track.get(event.track_id)
+                if detected_object is None:
+                    raise ValueError("Crossing has no associated unique object")
+                self._db.add(LineCrossing(
+                    detection_id=detection.id, image_id=frame_ids[saved_frame.frame_number],
+                    object_id=detected_object.id, track_id=event.track_id, direction=event.direction,
+                    frame_number=saved_frame.frame_number, timestamp_ms=saved_frame.timestamp_ms,
+                    confidence=event.confidence, bbox_x1=event.bbox[0], bbox_y1=event.bbox[1],
+                    bbox_x2=event.bbox[2], bbox_y2=event.bbox[3],
+                ))
         self._db.flush()
         # Measure after writing all results, immediately before the final commit.
         processing_time_ms = (

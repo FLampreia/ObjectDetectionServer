@@ -511,6 +511,8 @@ class ReportService:
             elements.extend(self._create_frames_section(
                 detection, objects, width, styles, **annotation_options,
             ))
+            if detection.line_x1 is not None:
+                elements.extend(self._create_crossings_section(detection, width, styles, **annotation_options))
         else:
             elements.extend(self._create_image_section(
                 detection, objects, width, styles, **annotation_options,
@@ -529,7 +531,7 @@ class ReportService:
 
     def _create_frames_section(self, detection, objects, width, styles, **annotation_options):
         frames = sorted(
-            (image for image in detection.images if image.frame_number is not None),
+            (image for image in detection.images if image.frame_number is not None and image.objects),
             key=lambda image: image.frame_number,
         )
         elements = [Paragraph("Saved Detection Frames", styles["Heading2"])]
@@ -575,6 +577,7 @@ class ReportService:
                 Spacer(1, 6),
                 self._create_pdf_image(
                     frame.image_url, card_width, area=area, objects=frame_objects,
+                    line=[detection.line_x1, detection.line_y1, detection.line_x2, detection.line_y2],
                     max_height=50 * mm, label_font_size=7, **annotation_options,
                 ),
                 Spacer(1, 8),
@@ -625,6 +628,49 @@ class ReportService:
                 ),
             ])
             elements.extend(self._create_objects_section(unassociated, styles, width))
+        return elements
+
+    def _create_crossings_section(self, detection, width, styles, **annotation_options):
+        events = sorted(detection.crossings, key=lambda event: (event.frame_number, event.track_id))
+        forward = sum(event.direction == "A_to_B" for event in events)
+        elements = [Paragraph("Line Crossings", styles["Heading2"]), Paragraph(
+            f"Total passages: {len(events)} | A to B: {forward} | B to A: {len(events) - forward}", styles["Normal"]),
+            Paragraph("Crossings use the bounding-box center. A and B are the sides of the oriented line.", styles["Normal"]),
+            Spacer(1, 10)]
+        by_image = {}
+        for event in events:
+            by_image.setdefault(event.image_id, []).append(event)
+        cards, gap = [], 12
+        card_width = (width - gap) / 2
+        # Keep each two-column card small enough to fit on a report page.
+        chunks = (group[start:start + 6] for group in by_image.values() for start in range(0, len(group), 6))
+        for frame_events in chunks:
+            frame = frame_events[0].image
+            frame_objects = [ListObjects(
+                id=event.object_id, obj_name=event.object.object_name,
+                obj_class_id=event.object.object_class_id, confidence=event.confidence,
+                bbox=Area(x1=event.bbox_x1, y1=event.bbox_y1, x2=event.bbox_x2, y2=event.bbox_y2),
+            ) for event in frame_events]
+            cards.append([
+                Paragraph(f"Frame {frame.frame_number} | {frame.timestamp_ms / 1000:.2f} s", styles["Heading2"]),
+                self._create_pdf_image(frame.image_url, card_width,
+                    area=[detection.area_x1, detection.area_y1, detection.area_x2, detection.area_y2],
+                    line=[detection.line_x1, detection.line_y1, detection.line_x2, detection.line_y2],
+                    objects=frame_objects, max_height=50 * mm, label_font_size=7,
+                    **{**annotation_options, "bbox_enable": True}),
+                Spacer(1, 6),
+                self._styled_report_table(
+                    [["#", "Object", "Direction"]] + [[str(index), event.object.object_name,
+                        "A to B" if event.direction == "A_to_B" else "B to A"]
+                        for index, event in enumerate(frame_events, 1)], (9, 48, 29), card_width, (0,)),
+            ])
+        if cards:
+            grid = Table([[cards[index], "", cards[index + 1] if index + 1 < len(cards) else ""]
+                          for index in range(0, len(cards), 2)], colWidths=[card_width, gap, card_width])
+            grid.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 12)]))
+            elements.append(grid)
         return elements
 
     def _create_frame_objects_table(self, objects, width):
@@ -806,6 +852,7 @@ class ReportService:
             text_color: str = "yellow",
             text_background_color: str = "black",
             label_font_size: float | None = None,
+            line: list[float | None] | None = None,
 
     ) -> PDFImage:
 
@@ -821,6 +868,18 @@ class ReportService:
         font = ImageFont.load_default(size=max(10, round(label_font_size / scale))) if label_font_size else None
         draw = ImageDraw.Draw(annotated_image)
         line_width = max(2, round(min(width, height) / 250))
+        if line is not None and all(value is not None for value in line):
+            draw.line(line, fill="#a78bfa", width=line_width)
+            dx, dy = line[2] - line[0], line[3] - line[1]
+            length = (dx * dx + dy * dy) ** 0.5
+            if length:
+                side_font = ImageFont.load_default(size=max(14, round(width / 50)))
+                offset = max(22, width / 30)
+                for label, sign in (("A", -1), ("B", 1)):
+                    point = ((line[0] + line[2]) / 2 - sign * dy / length * offset,
+                             (line[1] + line[3]) / 2 + sign * dx / length * offset)
+                    draw.text(point, label, font=side_font, anchor="mm", fill="#a78bfa",
+                              stroke_width=2, stroke_fill="black")
         if all(value is not None for value in area):
             # Outline the configured detection area.
             draw.rectangle(

@@ -15,6 +15,7 @@ from app.db.schema import DetectionType, TeamMember, User
 from app.models.detect import (
     Area,
     Detection,
+    CrossingEvent,
     FrameMetadata,
     FrameProcessingResponse,
     SocketParameters,
@@ -111,7 +112,7 @@ class SocketService:
 
     The route runs frontend-to-worker forwarding, worker-to-frontend forwarding,
     and upload-failure monitoring concurrently, sharing one SocketContext.
-    Only frames containing newly detected objects are uploaded. A successful
+    Frames containing new objects or line crossings are uploaded. A successful
     completion is sent after all uploads and the database commit have finished.
     """
 
@@ -132,8 +133,9 @@ class SocketService:
 
     async def upload_frame(
             self, pending: PendingFrame, new_objects: list[Detection], context: SocketContext,
+            crossings: list[CrossingEvent] | None = None,
     ) -> None:
-        """Upload one image and link only its newly detected objects to that image."""
+        """Upload one image shared by its new objects and crossing events."""
 
         async with context.upload_slots:
             uploaded = await upload_frame_image(pending.content)
@@ -144,10 +146,12 @@ class SocketService:
                 image_public_id=uploaded["public_id"],
                 image_url=uploaded["secure_url"],
                 detections=new_objects,
+                crossings=crossings or [],
             ))
 
     async def queue_upload(
             self, pending: PendingFrame, new_objects: list[Detection], context: SocketContext,
+            crossings: list[CrossingEvent] | None = None,
     ) -> None:
         """Schedule storage without waiting for each upload before replying to the browser."""
 
@@ -158,7 +162,7 @@ class SocketService:
             await asyncio.wait(context.upload_tasks, return_when=asyncio.FIRST_COMPLETED)
             self.check_upload_error(context)
 
-        task = asyncio.create_task(self.upload_frame(pending, new_objects, context))
+        task = asyncio.create_task(self.upload_frame(pending, new_objects, context, crossings))
         context.upload_tasks.add(task)
 
         def completed(upload_task):
@@ -219,6 +223,7 @@ class SocketService:
                 detection_type=DetectionType(parameters.detection_type),
                 result=result,
                 area=parameters.area,
+                line=parameters.line,
                 started_at=started_at,
             )
 
@@ -372,8 +377,21 @@ class SocketService:
             new_objects = context.new_objects(frame, parameters.area)
             self.check_upload_error(context)
 
-            if new_objects:
-                await self.queue_upload(pending, new_objects, context)
+            crossings = []
+            if frame.crossings and parameters.line is None:
+                raise ValueError("Worker returned crossings without a counting line")
+            tracks = {obj.track_id for obj in frame.detections_per_frame}
+            for event in frame.crossings:
+                if event.track_id not in tracks:
+                    raise ValueError("Crossing object is missing from the frame")
+                stored_event = event.model_copy(deep=True)
+                if parameters.area is not None:
+                    left, top = min(parameters.area.x1, parameters.area.x2), min(parameters.area.y1, parameters.area.y2)
+                    stored_event.bbox = [event.bbox[0] + left, event.bbox[1] + top,
+                                         event.bbox[2] + left, event.bbox[3] + top]
+                crossings.append(stored_event)
+            if new_objects or crossings:
+                await self.queue_upload(pending, new_objects, context, crossings)
 
             # Keep crop-relative coordinates for the existing frontend drawing.
             await frontend_ws.send_text(message)
