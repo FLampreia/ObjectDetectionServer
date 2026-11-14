@@ -10,6 +10,7 @@ venv/
 objectDetection.db
 TODO.md
 .postman
+.tests/
 
 
 htmlReport
