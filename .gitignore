@@ -11,6 +11,7 @@ objectDetection.db
 TODO.md
 .postman
 .tests/
+pytest.ini
 
 
 htmlReport
